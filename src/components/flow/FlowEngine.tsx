@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { layoutWithElk } from "./elk-layout";
 
 // ---------- color tokens ----------
 const C = {
@@ -622,16 +623,48 @@ function FlowEngineInner() {
     [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused, densityMode, focusedSnapshot],
   );
 
+  // ----- ELK layout -----
+  // The graph builder produces logical nodes+edges with placeholder positions.
+  // ELK assigns real positions using a layered algorithm. We cache the result
+  // per (viewKey + topology) so we don't re-run on every tick.
+  const [elkNodes, setElkNodes] = useState<Node[]>(baseGraph.nodes);
+  const [elkRunning, setElkRunning] = useState(false);
+
+  // Topology signature: only the structural bits ELK cares about.
+  const topoKey = useMemo(
+    () => `${viewKey}|${densityMode}|${baseGraph.nodes.map((n) => n.id).join(",")}|${baseGraph.edges.map((e) => e.id).join(",")}`,
+    [viewKey, densityMode, baseGraph.nodes, baseGraph.edges],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    setElkRunning(true);
+    layoutWithElk(baseGraph.nodes, baseGraph.edges, {
+      direction: "RIGHT",
+      nodeNodeSpacing: densityMode === "high" ? 80 : densityMode === "low" ? 48 : 60,
+      layerSpacing: densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        setElkNodes(res.nodes);
+        setElkRunning(false);
+        setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 60);
+      })
+      .catch(() => { if (!cancelled) setElkRunning(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topoKey]);
+
   const decoratedNodes = useMemo<Node[]>(() => {
-    // Auto Layout ON → ignore manual overrides, always use deterministic layout.
-    // Auto Layout OFF → respect user-dragged positions for this view.
+    // Auto Layout ON → use ELK positions.
+    // Auto Layout OFF → respect user-dragged positions for this view, fall back to ELK.
     const ov = autoLayout ? {} : (overrides[viewKey] ?? {});
-    return baseGraph.nodes.map((n) => ({
+    return elkNodes.map((n) => ({
       ...n,
       draggable: !layoutLocked,
       position: ov[n.id] ?? n.position,
     }));
-  }, [baseGraph.nodes, overrides, viewKey, layoutLocked, autoLayout]);
+  }, [elkNodes, overrides, viewKey, layoutLocked, autoLayout]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(decoratedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseGraph.edges);
@@ -641,7 +674,18 @@ function FlowEngineInner() {
 
   const handleResetLayout = () => {
     setOverrides((o) => { const n = { ...o }; delete n[viewKey]; return n; });
-    setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 50);
+    setAutoLayout(true);
+    // Force a re-layout by re-running ELK on the current graph.
+    setElkRunning(true);
+    layoutWithElk(baseGraph.nodes, baseGraph.edges, {
+      direction: "RIGHT",
+      nodeNodeSpacing: densityMode === "high" ? 80 : densityMode === "low" ? 48 : 60,
+      layerSpacing: densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+    }).then((res) => {
+      setElkNodes(res.nodes);
+      setElkRunning(false);
+      setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 60);
+    });
   };
   const handleFitView = () => fitView({ padding: 0.15, duration: 300 });
 
@@ -844,7 +888,8 @@ function FlowEngineInner() {
           </div>
 
           <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
-            Each task is its own lane · Drag nodes to rearrange · Reset Layout anytime
+            Layout: ELK layered · Drag nodes to rearrange · Reset Layout anytime
+            {elkRunning ? " · laying out…" : ""}
           </div>
         </div>
       </div>
