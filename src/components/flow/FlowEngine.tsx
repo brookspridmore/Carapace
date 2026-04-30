@@ -7,7 +7,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { nodeTypes } from "./nodes";
 import {
-  AGENTS, MEMORY_EVENTS, type Agent, type AgentId, type Task,
+  AGENTS, type Agent, type AgentId, type Task, type ToolKind,
 } from "@/lib/mock-data";
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
 import {
@@ -31,36 +31,23 @@ const C = {
   muted:      "var(--color-border)",
 };
 
-const INPUT_DEFS: { kind: "human" | "telegram" | "terminal" | "api" | "cron" | "parent"; label: string; rate?: string }[] = [
+const INPUT_DEFS: { kind: "human" | "telegram" | "terminal" | "api" | "cron"; label: string; rate?: string }[] = [
   { kind: "human", label: "Human", rate: "2 msg/min" },
   { kind: "telegram", label: "Telegram", rate: "1 msg/min" },
-  { kind: "terminal", label: "Terminal", rate: "idle" },
   { kind: "api", label: "API", rate: "0.4 req/s" },
   { kind: "cron", label: "Cron", rate: "next 14m" },
 ];
 
-const AGENT_TOOLS: Record<AgentId, { kind: "exec" | "web" | "search" | "memory" | "file" | "tts"; label: string; calls?: number; risky?: boolean }[]> = {
-  chief:      [{ kind: "memory", label: "memory", calls: 18 }, { kind: "file", label: "file", calls: 3 }],
-  researcher: [{ kind: "web", label: "web", calls: 12 }, { kind: "search", label: "search", calls: 7 }, { kind: "memory", label: "memory", calls: 5 }],
-  marketer:   [{ kind: "file", label: "file", calls: 6 }, { kind: "memory", label: "memory", calls: 4 }, { kind: "tts", label: "tts", calls: 0 }],
-  builder:    [{ kind: "exec", label: "exec", calls: 4, risky: true }, { kind: "file", label: "file", calls: 9 }, { kind: "search", label: "search", calls: 3 }],
-  ops:        [{ kind: "exec", label: "exec", calls: 2, risky: true }, { kind: "file", label: "file", calls: 1 }],
-};
-
-const INFRA_DEFS: { kind: "db" | "fts" | "snapshots" | "openclaw"; label: string; meta?: string }[] = [
+const INFRA_DEFS: { kind: "openclaw"; label: string; meta?: string }[] = [
   { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" },
-  { kind: "db", label: "Postgres", meta: "agents · tasks" },
-  { kind: "fts", label: "FTS index", meta: "memory · logs" },
-  { kind: "snapshots", label: "Snapshot store", meta: "12 snapshots" },
 ];
 
-const toolStroke = (kind: string) =>
+const toolStroke = (kind: ToolKind) =>
   kind === "exec" ? C.exec :
   kind === "memory" ? C.memory :
   (kind === "web" || kind === "search") ? C.tool :
   C.muted;
 
-// Edge color/style derived from task status
 function taskEdgeStyle(t: Task) {
   if (t.status === "blocked") return { stroke: C.blocked, dashed: true, animated: false, label: "blocked" };
   if (t.status === "needs_review") return { stroke: C.review, dashed: false, animated: true, label: "needs review" };
@@ -87,420 +74,407 @@ function taskNodeData(t: Task, focused: boolean) {
 }
 
 // ====================================================================
-// Orchestration graph — driven by live tasks
+// Task-driven graph builder
 // ====================================================================
+//
+// The graph is assembled FROM tasks. Each active task contributes a
+// self-contained execution path:
+//
+//   Chief → Task → Subagent → (tools used) / (memory refs) / (outputs) / (approvals)
+//
+// Agent nodes are pure routing. Tools/memory/outputs only appear when an
+// active task actually uses them. A subagent with no active tasks is
+// rendered dim and unconnected — it represents available capacity, not
+// active execution.
 
-function buildOrchestrationGraph(
+type BuildOpts = {
+  showCompleted: boolean;
+  focusedTaskId: string | null;
+  filterToFocused: boolean;
+  mode: "orchestration" | "focus";
+  focusAgentId: AgentId; // only meaningful in focus mode
+};
+
+function selectVisibleTasks(tasks: Task[], opts: BuildOpts): Task[] {
+  let list = tasks.filter((t) => isActiveTask(t) || (opts.showCompleted && (t.status === "done" || t.status === "failed")));
+  if (opts.filterToFocused && opts.focusedTaskId) {
+    list = list.filter((t) => t.id === opts.focusedTaskId);
+  }
+  if (opts.mode === "focus") {
+    list = list.filter((t) => t.agentId === opts.focusAgentId);
+  }
+  return list;
+}
+
+function buildTaskDrivenGraph(
   chief: Agent,
   tasks: Task[],
-  opts: { showCompleted: boolean; focusedTaskId: string | null; filterToFocused: boolean },
+  opts: BuildOpts,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const cx = 700, cy = 240;
+  const seen = new Set<string>();
+  const pushNode = (n: Node) => { if (!seen.has(n.id)) { seen.add(n.id); nodes.push(n); } };
 
-  nodes.push({
-    id: `agent-${chief.id}`,
-    type: "agent",
-    position: { x: cx, y: cy - 160 },
-    data: { ...chief } as unknown as Record<string, unknown>,
+  const visible = selectVisibleTasks(tasks, opts);
+
+  // --- 1. Chief always present at the top center (orchestrator routing node)
+  const chiefX = opts.mode === "orchestration" ? 720 : 80;
+  const chiefY = opts.mode === "orchestration" ? 80 : 40;
+  pushNode({
+    id: `agent-${chief.id}`, type: "agent",
+    position: { x: chiefX, y: chiefY },
+    data: opts.mode === "orchestration"
+      ? ({ ...chief } as unknown as Record<string, unknown>)
+      : ({ ...chief, compact: true, dim: true } as unknown as Record<string, unknown>),
   });
 
-  // Inputs feeding chief
-  INPUT_DEFS.forEach((inp, i) => {
-    const id = `input-${inp.kind}`;
-    nodes.push({
-      id, type: "input",
-      position: { x: 40, y: 40 + i * 80 },
-      data: { ...inp } as unknown as Record<string, unknown>,
-    });
-    const active = i === 0 || i === 1;
-    edges.push({
-      id: `e-${id}-chief`, source: id, target: `agent-${chief.id}`,
-      animated: active,
-      style: { stroke: active ? C.tool : C.muted, strokeWidth: active ? 1.5 : 1 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: active ? C.tool : C.muted },
-    });
-  });
-
-  const subs = AGENTS.filter((a) => a.parentId === chief.id);
-  const baseX = 220;
-  const stepX = 340;
-  const subY = cy + 460;
-
-  subs.forEach((sub, i) => {
-    const sx = baseX + i * stepX;
-    const stagger = (i % 2) * 70;
-    const subNodeId = `agent-${sub.id}`;
-
-    // Tasks belonging to this subagent
-    const agentTasks = tasks
-      .filter((t) => t.agentId === sub.id)
-      .filter((t) => opts.showCompleted ? true : t.status !== "done")
-      .filter((t) => opts.filterToFocused && opts.focusedTaskId
-        ? t.id === opts.focusedTaskId
-        : isActiveTask(t) || (opts.showCompleted && (t.status === "done" || t.status === "failed"))
-      );
-
-    // Render subagent (faded if no active work)
-    const hasWork = agentTasks.some(isActiveTask);
-    nodes.push({
-      id: subNodeId, type: "agent",
-      position: { x: sx, y: subY + stagger },
-      data: { ...sub, compact: true, dim: !hasWork } as unknown as Record<string, unknown>,
-    });
-
-    if (agentTasks.length === 0) {
-      // Idle — thin dotted link to chief
+  // --- 2. Inputs feed Chief (orchestration) or focused agent (focus)
+  // These are part of the runtime, not a task — but we only show 2 by default
+  // to avoid implying capability where none is in use.
+  if (opts.mode === "orchestration") {
+    INPUT_DEFS.slice(0, 2).forEach((inp, i) => {
+      const id = `input-${inp.kind}`;
+      pushNode({
+        id, type: "input",
+        position: { x: 60, y: 40 + i * 80 },
+        data: { ...inp } as unknown as Record<string, unknown>,
+      });
       edges.push({
-        id: `e-chief-${subNodeId}`,
-        source: `agent-${chief.id}`, target: subNodeId,
-        style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "3 5" },
+        id: `e-${id}-chief`, source: id, target: `agent-${chief.id}`,
+        animated: true,
+        style: { stroke: C.tool, strokeWidth: 1.2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: C.tool },
+      });
+    });
+  }
+
+  // --- 3. Group visible tasks by their owning subagent
+  const subs = AGENTS.filter((a) => a.parentId === chief.id);
+  const subOrder: AgentId[] = subs.map((s) => s.id);
+  const tasksByAgent = new Map<AgentId, Task[]>();
+  subOrder.forEach((id) => tasksByAgent.set(id, []));
+  visible
+    .filter((t) => t.agentId !== chief.id)
+    .forEach((t) => {
+      const list = tasksByAgent.get(t.agentId);
+      if (list) list.push(t);
+    });
+
+  // Lay subagents in columns; only render a subagent if it has visible work
+  // OR (in orchestration view) we always show the org so operators understand routing.
+  const colBaseX = 220;
+  const colStepX = 360;
+  const subY = opts.mode === "orchestration" ? 720 : 0; // unused in focus mode
+  const taskRowY = opts.mode === "orchestration" ? 280 : 100;
+  const taskRowStepY = 180;
+
+  if (opts.mode === "orchestration") {
+    subs.forEach((sub, i) => {
+      const subTasks = tasksByAgent.get(sub.id) ?? [];
+      const sx = colBaseX + i * colStepX;
+      const stagger = (i % 2) * 60;
+      const hasWork = subTasks.some(isActiveTask);
+      pushNode({
+        id: `agent-${sub.id}`, type: "agent",
+        position: { x: sx, y: subY + stagger },
+        data: { ...sub, compact: true, dim: !hasWork } as unknown as Record<string, unknown>,
+      });
+
+      if (subTasks.length === 0) {
+        // No active task → no execution path. Show a faint routing line so
+        // hierarchy is still visible, but no tools/memory/outputs.
+        edges.push({
+          id: `e-chief-agent-${sub.id}`,
+          source: `agent-${chief.id}`, target: `agent-${sub.id}`,
+          style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "3 5" },
+          markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
+        });
+      }
+
+      // For each task, render its execution path
+      subTasks.forEach((task, ti) => {
+        renderTaskPath({
+          task,
+          chiefId: chief.id,
+          subAgentId: sub.id,
+          taskPos: { x: sx - 10, y: taskRowY + ti * taskRowStepY + stagger / 2 },
+          sidePos: { x: sx + 220, yStart: taskRowY + ti * taskRowStepY + stagger / 2 - 30 },
+          memoryPos: { x: sx + 220, yStart: taskRowY + ti * taskRowStepY + stagger / 2 + 90 },
+          focusedTaskId: opts.focusedTaskId,
+          pushNode, edges,
+        });
+      });
+    });
+  } else {
+    // ----- Focus mode -----
+    // Center the focused agent. Only render that agent + its visible tasks.
+    const agent = AGENTS.find((a) => a.id === opts.focusAgentId)!;
+    const cx = 600, cy = 260;
+    pushNode({
+      id: `agent-${agent.id}`, type: "agent",
+      position: { x: cx, y: cy },
+      data: { ...agent } as unknown as Record<string, unknown>,
+    });
+
+    // Inputs (slim, to the left of the focused agent — only 2)
+    INPUT_DEFS.slice(0, 2).forEach((inp, i) => {
+      const id = `input-${inp.kind}`;
+      pushNode({
+        id, type: "input",
+        position: { x: 60, y: 220 + i * 80 },
+        data: { ...inp } as unknown as Record<string, unknown>,
+      });
+      edges.push({
+        id: `e-${id}-agent`, source: id, target: `agent-${agent.id}`,
+        animated: agent.status !== "idle",
+        style: { stroke: agent.status !== "idle" ? C.tool : C.muted, strokeWidth: 1.2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: agent.status !== "idle" ? C.tool : C.muted },
+      });
+    });
+
+    // Tasks stack between chief and focused agent
+    const taskColX = 320;
+    visible.forEach((task, i) => {
+      const ty = 80 + i * 130;
+      renderTaskPath({
+        task,
+        chiefId: chief.id,
+        subAgentId: agent.id,
+        taskPos: { x: taskColX, y: ty },
+        sidePos: { x: cx + 280, yStart: ty - 20 },
+        memoryPos: { x: cx + 280, yStart: ty + 110 },
+        focusedTaskId: opts.focusedTaskId,
+        pushNode, edges,
+      });
+    });
+
+    // OpenClaw runtime sits at the bottom — agent connects to it because all
+    // execution flows through OpenClaw.
+    INFRA_DEFS.forEach((infra, i) => {
+      const id = `infra-${infra.kind}`;
+      pushNode({
+        id, type: "infra",
+        position: { x: cx - 80 + i * 240, y: cy + Math.max(400, visible.length * 130 + 200) },
+        data: { ...infra } as unknown as Record<string, unknown>,
+      });
+      edges.push({
+        id: `e-agent-${id}`, source: `agent-${agent.id}`, target: id,
+        style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
         markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
       });
-      return;
-    }
-
-    // Stack tasks vertically between chief and subagent
-    const taskBaseY = cy + 100 + stagger / 2;
-    const taskStepY = 110;
-
-    agentTasks.forEach((task, ti) => {
-      const taskId = `task-${task.id}`;
-      const focused = task.id === opts.focusedTaskId;
-      const tx = sx + (ti - (agentTasks.length - 1) / 2) * 30;
-      const ty = taskBaseY + ti * taskStepY;
-
-      nodes.push({
-        id: taskId, type: "task",
-        position: { x: tx - 10, y: ty },
-        data: taskNodeData(task, focused),
-        className: focused ? "ring-2 ring-yellow rounded-md" : undefined,
-      });
-
-      const es = taskEdgeStyle(task);
-      edges.push({
-        id: `e-chief-${taskId}`,
-        source: `agent-${chief.id}`, target: taskId,
-        animated: es.animated && !task.status.startsWith("don"),
-        style: {
-          stroke: es.stroke,
-          strokeWidth: focused ? 2.5 : 1.5,
-          strokeDasharray: es.dashed ? "4 4" : undefined,
-          opacity: task.status === "done" ? 0.4 : 1,
-        },
-        label: es.label,
-        labelStyle: { fill: "var(--color-muted-foreground)", fontSize: 10, fontFamily: "JetBrains Mono" },
-        labelBgStyle: { fill: "var(--carapace-panel)" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
-      });
-      edges.push({
-        id: `e-${taskId}-${subNodeId}`,
-        source: taskId, target: subNodeId,
-        animated: es.animated,
-        style: {
-          stroke: es.stroke,
-          strokeWidth: focused ? 2.5 : 1.5,
-          strokeDasharray: es.dashed ? "4 4" : undefined,
-          opacity: task.status === "done" ? 0.4 : 1,
-        },
-        markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
-      });
-
-      // Side artifacts off the task: snapshot / output / approval / blocked
-      const sideX = tx + 220;
-      let sideY = ty - 30;
-
-      if (task.snapshotId) {
-        const sid = `snap-${task.id}`;
-        nodes.push({
-          id: sid, type: "memory",
-          position: { x: sideX, y: sideY },
-          data: { kind: "snapshot", ref: task.snapshotId, note: "linked snapshot" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-${taskId}-${sid}`, source: taskId, target: sid,
-          style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
-        });
-        sideY += 70;
-      }
-
-      if (task.outputs.length > 0) {
-        const oid = `out-${task.id}`;
-        nodes.push({
-          id: oid, type: "output",
-          position: { x: sideX, y: sideY },
-          data: { kind: "artifact", label: `${task.outputs.length} output${task.outputs.length === 1 ? "" : "s"}`, meta: task.outputs[0] } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-${taskId}-${oid}`, source: taskId, target: oid,
-          animated: task.status === "running",
-          style: { stroke: C.output, strokeWidth: 1.2, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.output },
-        });
-        sideY += 70;
-      }
-
-      if (task.status === "needs_review") {
-        const aid = `appr-${task.id}`;
-        nodes.push({
-          id: aid, type: "approval",
-          position: { x: sideX, y: sideY },
-          data: { label: "Needs Review", reason: "operator action" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-${taskId}-${aid}`, source: taskId, target: aid,
-          animated: true,
-          style: { stroke: C.approval, strokeWidth: 1.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
-        });
-      }
-
-      if (task.status === "blocked") {
-        const bid = `block-${task.id}`;
-        nodes.push({
-          id: bid, type: "approval",
-          position: { x: sideX, y: sideY },
-          data: { label: "Blocked", reason: task.logTail[0] ?? "blocker" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-${taskId}-${bid}`, source: taskId, target: bid,
-          style: { stroke: C.blocked, strokeWidth: 1.5, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.blocked },
-        });
-      }
     });
-  });
+  }
+
+  // --- Orchestration mode: bottom OpenClaw runtime, single shared node
+  if (opts.mode === "orchestration") {
+    const id = `infra-openclaw`;
+    pushNode({
+      id, type: "infra",
+      position: { x: 720, y: subY + 200 },
+      data: { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" } as unknown as Record<string, unknown>,
+    });
+    // Only connect from subagents that have visible work
+    subs.forEach((sub) => {
+      if ((tasksByAgent.get(sub.id)?.length ?? 0) === 0) return;
+      edges.push({
+        id: `e-${sub.id}-infra`, source: `agent-${sub.id}`, target: id,
+        style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
+        markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
+      });
+    });
+  }
 
   return { nodes, edges };
 }
 
-// ====================================================================
-// Focus graph — single agent, with all (or one) of their tasks
-// ====================================================================
+// Render the per-task execution path:
+//   Chief → Task → Subagent  +  (tools / memory / outputs / approvals branching off task)
+function renderTaskPath(args: {
+  task: Task;
+  chiefId: AgentId;
+  subAgentId: AgentId;
+  taskPos: { x: number; y: number };
+  sidePos: { x: number; yStart: number };
+  memoryPos: { x: number; yStart: number };
+  focusedTaskId: string | null;
+  pushNode: (n: Node) => void;
+  edges: Edge[];
+}) {
+  const { task, chiefId, subAgentId, taskPos, sidePos, memoryPos, focusedTaskId, pushNode, edges } = args;
+  const taskId = `task-${task.id}`;
+  const focused = task.id === focusedTaskId;
+  const dim = task.status === "done" || task.status === "failed";
 
-function buildFocusGraph(
-  agent: Agent,
-  chief: Agent,
-  tasks: Task[],
-  opts: { showCompleted: boolean; focusedTaskId: string | null; filterToFocused: boolean },
-): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = [];
-  const edges: Edge[] = [];
-  const cx = 560, cy = 280;
-
-  // Chief (compact, top-left)
-  nodes.push({
-    id: `agent-${chief.id}`, type: "agent",
-    position: { x: 60, y: 40 },
-    data: { ...chief, compact: true, dim: true } as unknown as Record<string, unknown>,
+  pushNode({
+    id: taskId, type: "task",
+    position: taskPos,
+    data: taskNodeData(task, focused),
   });
 
-  // Focused agent at center
-  nodes.push({
-    id: `agent-${agent.id}`, type: "agent",
-    position: { x: cx, y: cy },
-    data: { ...agent } as unknown as Record<string, unknown>,
+  const es = taskEdgeStyle(task);
+  const baseEdgeStyle = {
+    stroke: es.stroke,
+    strokeWidth: focused ? 2.5 : 1.5,
+    strokeDasharray: es.dashed ? "4 4" : undefined,
+    opacity: dim ? 0.45 : 1,
+  };
+
+  // Chief → Task
+  edges.push({
+    id: `e-chief-${taskId}`,
+    source: `agent-${chiefId}`, target: taskId,
+    animated: es.animated && !dim,
+    style: baseEdgeStyle,
+    label: es.label,
+    labelStyle: { fill: "var(--color-muted-foreground)", fontSize: 10, fontFamily: "JetBrains Mono" },
+    labelBgStyle: { fill: "var(--carapace-panel)" },
+    markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
+  });
+  // Task → Subagent
+  edges.push({
+    id: `e-${taskId}-sub-${subAgentId}`,
+    source: taskId, target: `agent-${subAgentId}`,
+    animated: es.animated && !dim,
+    style: baseEdgeStyle,
+    markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
   });
 
-  // Tasks for this agent
-  const agentTasks = tasks
-    .filter((t) => t.agentId === agent.id)
-    .filter((t) => opts.showCompleted ? true : t.status !== "done")
-    .filter((t) => opts.filterToFocused && opts.focusedTaskId
-      ? t.id === opts.focusedTaskId
-      : isActiveTask(t) || (opts.showCompleted && t.status === "done")
-    );
-
-  // Lay tasks in a column between chief and focused agent
-  const taskColX = 280;
-  agentTasks.forEach((task, i) => {
-    const taskId = `task-${task.id}`;
-    const ty = 80 + i * 110;
-    const focused = task.id === opts.focusedTaskId;
-    nodes.push({
-      id: taskId, type: "task",
-      position: { x: taskColX, y: ty },
-      data: taskNodeData(task, focused),
+  // ---- Tools used by THIS task (subagent → tool) ----
+  // Tool nodes are namespaced per task so two tasks using the same tool
+  // don't share state, which would imply false coupling.
+  let sideY = sidePos.yStart;
+  (task.toolsUsed ?? []).forEach((tool) => {
+    const toolId = `tool-${task.id}-${tool.kind}`;
+    pushNode({
+      id: toolId, type: "tool",
+      position: { x: sidePos.x, y: sideY },
+      data: { kind: tool.kind, label: tool.kind, calls: tool.calls } as unknown as Record<string, unknown>,
     });
-    const es = taskEdgeStyle(task);
-    edges.push({
-      id: `e-chief-${taskId}`, source: `agent-${chief.id}`, target: taskId,
-      animated: es.animated, style: {
-        stroke: es.stroke, strokeWidth: focused ? 2.5 : 1.5,
-        strokeDasharray: es.dashed ? "4 4" : undefined,
-      },
-      label: es.label,
-      labelStyle: { fill: "var(--color-muted-foreground)", fontSize: 10, fontFamily: "JetBrains Mono" },
-      labelBgStyle: { fill: "var(--carapace-panel)" },
-      markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
-    });
-    edges.push({
-      id: `e-${taskId}-agent`, source: taskId, target: `agent-${agent.id}`,
-      animated: es.animated, style: {
-        stroke: es.stroke, strokeWidth: focused ? 2.5 : 1.5,
-        strokeDasharray: es.dashed ? "4 4" : undefined,
-      },
-      markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
-    });
-
-    // Side artifacts (snapshot / output / approval / blocked) off the focused task only,
-    // to keep the focus view clean
-    if (focused || agentTasks.length === 1) {
-      let sideY = ty - 20;
-      const sideX = cx + 280;
-      if (task.snapshotId) {
-        const sid = `snap-${task.id}`;
-        nodes.push({
-          id: sid, type: "memory",
-          position: { x: sideX, y: sideY },
-          data: { kind: "snapshot", ref: task.snapshotId, note: "snapshot" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-agent-${sid}`, source: `agent-${agent.id}`, target: sid,
-          style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
-        });
-        sideY += 80;
-      }
-      if (task.outputs.length > 0) {
-        const oid = `out-${task.id}`;
-        nodes.push({
-          id: oid, type: "output",
-          position: { x: sideX, y: sideY },
-          data: { kind: "artifact", label: "Output", meta: task.outputs[0] } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-agent-${oid}`, source: `agent-${agent.id}`, target: oid,
-          animated: task.status === "running",
-          style: { stroke: C.output, strokeWidth: 1.2, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.output },
-        });
-        sideY += 80;
-      }
-      if (task.status === "needs_review") {
-        const aid = `appr-${task.id}`;
-        nodes.push({
-          id: aid, type: "approval",
-          position: { x: sideX, y: sideY },
-          data: { label: "Needs Review", reason: "operator action" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-agent-${aid}`, source: `agent-${agent.id}`, target: aid,
-          animated: true, style: { stroke: C.approval, strokeWidth: 1.5 },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
-        });
-      }
-      if (task.status === "blocked") {
-        const bid = `block-${task.id}`;
-        nodes.push({
-          id: bid, type: "approval",
-          position: { x: sideX, y: sideY },
-          data: { label: "Blocked", reason: task.logTail[0] ?? "blocker" } as unknown as Record<string, unknown>,
-        });
-        edges.push({
-          id: `e-agent-${bid}`, source: `agent-${agent.id}`, target: bid,
-          style: { stroke: C.blocked, strokeWidth: 1.5, strokeDasharray: "4 4" },
-          markerEnd: { type: MarkerType.ArrowClosed, color: C.blocked },
-        });
-      }
-    }
-  });
-
-  // Inputs (left, below chief)
-  INPUT_DEFS.slice(0, 4).forEach((inp, i) => {
-    const id = `input-${inp.kind}`;
-    nodes.push({
-      id, type: "input",
-      position: { x: 60, y: 280 + i * 70 },
-      data: { ...inp } as unknown as Record<string, unknown>,
-    });
-    const active = i === 0 && agent.status !== "idle";
-    edges.push({
-      id: `e-${id}-agent`, source: id, target: `agent-${agent.id}`,
-      animated: active,
-      style: { stroke: active ? C.tool : C.muted, strokeWidth: active ? 1.5 : 1 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: active ? C.tool : C.muted },
-    });
-  });
-
-  // Tools (right column)
-  const tools = AGENT_TOOLS[agent.id] ?? [];
-  tools.forEach((tool, i) => {
-    const id = `tool-${tool.kind}`;
-    nodes.push({
-      id, type: "tool",
-      position: { x: cx + 480, y: cy + 200 + i * 80 },
-      data: { ...tool } as unknown as Record<string, unknown>,
-    });
-    const active = (tool.calls ?? 0) > 0 && agent.status === "executing";
     const stroke = toolStroke(tool.kind);
-    edges.push({
-      id: `e-agent-${id}`, source: `agent-${agent.id}`, target: id,
-      animated: active,
-      style: {
-        stroke: active ? stroke : C.muted,
-        strokeWidth: active ? 1.5 : 1,
-        strokeDasharray: active && tool.kind !== "exec" ? "4 4" : undefined,
-      },
-      markerEnd: { type: MarkerType.ArrowClosed, color: active ? stroke : C.muted },
-    });
+    const active = task.status === "running" && (tool.calls ?? 0) > 0;
+
     if (tool.risky) {
-      const gateId = `approval-${tool.kind}`;
-      nodes.push({
+      // Approval gate between subagent and risky tool
+      const gateId = `apprtool-${task.id}-${tool.kind}`;
+      pushNode({
         id: gateId, type: "approval",
-        position: { x: cx + 280, y: cy + 200 + i * 80 + 20 },
-        data: { label: `Approve ${tool.label}`, reason: "exec / risky action" } as unknown as Record<string, unknown>,
+        position: { x: sidePos.x - 200, y: sideY + 20 },
+        data: { label: `Approve ${tool.kind}`, reason: "exec / risky action" } as unknown as Record<string, unknown>,
       });
       edges.push({
-        id: `e-agent-${gateId}`, source: `agent-${agent.id}`, target: gateId,
+        id: `e-sub-${gateId}`, source: `agent-${subAgentId}`, target: gateId,
         animated: true, style: { stroke: C.approval, strokeWidth: 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
       });
       edges.push({
-        id: `e-${gateId}-${id}`, source: gateId, target: id,
+        id: `e-${gateId}-${toolId}`, source: gateId, target: toolId,
         style: { stroke: C.approval, strokeWidth: 1.5, strokeDasharray: "4 4" },
         markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
       });
+    } else {
+      edges.push({
+        id: `e-sub-${toolId}`, source: `agent-${subAgentId}`, target: toolId,
+        animated: active,
+        style: {
+          stroke: active ? stroke : C.muted,
+          strokeWidth: active ? 1.5 : 1,
+          strokeDasharray: active && tool.kind !== "exec" ? "4 4" : undefined,
+        },
+        markerEnd: { type: MarkerType.ArrowClosed, color: active ? stroke : C.muted },
+      });
     }
+    sideY += 80;
   });
 
-  // Memory cluster (bottom-right)
-  const events = MEMORY_EVENTS.filter((e) => e.agentId === agent.id);
-  events.forEach((ev, i) => {
-    const id = `mem-${ev.id}`;
-    const x = cx + 320 + (i % 2) * 200;
-    const y = cy + 580 + Math.floor(i / 2) * 80;
-    nodes.push({
-      id, type: "memory",
-      position: { x, y },
-      data: { kind: ev.kind, ref: ev.ref, note: ev.note } as unknown as Record<string, unknown>,
+  // ---- Outputs produced by this task (task → output) ----
+  if (task.outputs.length > 0) {
+    const oid = `out-${task.id}`;
+    pushNode({
+      id: oid, type: "output",
+      position: { x: sidePos.x, y: sideY },
+      data: {
+        kind: "artifact",
+        label: `${task.outputs.length} output${task.outputs.length === 1 ? "" : "s"}`,
+        meta: task.outputs[0],
+      } as unknown as Record<string, unknown>,
     });
     edges.push({
-      id: `e-${id}-agent`, source: id, target: `agent-${agent.id}`,
-      animated: true,
+      id: `e-${taskId}-${oid}`, source: taskId, target: oid,
+      animated: task.status === "running",
+      style: { stroke: C.output, strokeWidth: 1.2, strokeDasharray: "4 4" },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.output },
+    });
+    sideY += 70;
+  }
+
+  // ---- Approval / blocked (task-level operator gates) ----
+  if (task.status === "needs_review") {
+    const aid = `appr-${task.id}`;
+    pushNode({
+      id: aid, type: "approval",
+      position: { x: sidePos.x, y: sideY },
+      data: { label: "Needs Review", reason: "operator action" } as unknown as Record<string, unknown>,
+    });
+    edges.push({
+      id: `e-${taskId}-${aid}`, source: taskId, target: aid,
+      animated: true, style: { stroke: C.approval, strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
+    });
+    sideY += 70;
+  }
+  if (task.status === "blocked") {
+    const bid = `block-${task.id}`;
+    pushNode({
+      id: bid, type: "approval",
+      position: { x: sidePos.x, y: sideY },
+      data: { label: "Blocked", reason: task.logTail[0] ?? "blocker" } as unknown as Record<string, unknown>,
+    });
+    edges.push({
+      id: `e-${taskId}-${bid}`, source: taskId, target: bid,
+      style: { stroke: C.blocked, strokeWidth: 1.5, strokeDasharray: "4 4" },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.blocked },
+    });
+    sideY += 70;
+  }
+
+  // ---- Memory refs used by this task (task → memory) ----
+  let memY = memoryPos.yStart;
+  (task.memoryRefs ?? []).forEach((ref, i) => {
+    const mid = `mem-${task.id}-${i}`;
+    const isSnapshotRef = ref.startsWith("snap_");
+    pushNode({
+      id: mid, type: "memory",
+      position: { x: memoryPos.x + 200, y: memY },
+      data: {
+        kind: isSnapshotRef ? "snapshot" : "read",
+        ref,
+        note: isSnapshotRef ? "linked snapshot" : "context retrieval",
+      } as unknown as Record<string, unknown>,
+    });
+    edges.push({
+      id: `e-${mid}-${taskId}`, source: mid, target: taskId,
+      animated: task.status === "running",
       style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
     });
+    memY += 70;
   });
 
-  // Infra row (very bottom)
-  INFRA_DEFS.forEach((infra, i) => {
-    const id = `infra-${infra.kind}`;
-    nodes.push({
-      id, type: "infra",
-      position: { x: 160 + i * 240, y: cy + 820 },
-      data: { ...infra } as unknown as Record<string, unknown>,
+  // ---- Snapshot (task-level) ----
+  if (task.snapshotId) {
+    const sid = `snap-${task.id}`;
+    pushNode({
+      id: sid, type: "memory",
+      position: { x: memoryPos.x + 200, y: memY },
+      data: { kind: "snapshot", ref: task.snapshotId, note: "linked snapshot" } as unknown as Record<string, unknown>,
     });
     edges.push({
-      id: `e-agent-${id}`, source: `agent-${agent.id}`, target: id,
-      style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
-      markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
+      id: `e-${taskId}-${sid}`, source: taskId, target: sid,
+      style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
     });
-  });
-
-  return { nodes, edges };
+  }
 }
 
 // ====================================================================
@@ -543,7 +517,6 @@ function FlowEngineInner() {
     return () => clearInterval(t);
   }, [paused, mounted]);
 
-  // Honor ?task=<id> deep-link from Kanban: focus the task + jump to its agent
   useEffect(() => {
     const id = search?.task;
     if (!id) return;
@@ -568,10 +541,14 @@ function FlowEngineInner() {
   const filterToFocused = flowFilterMode === "selected" && !!focusedTaskId;
 
   const baseGraph = useMemo(
-    () => isOrchestration
-      ? buildOrchestrationGraph(liveAgent, tasks, { showCompleted, focusedTaskId, filterToFocused })
-      : buildFocusGraph(liveAgent, chief, tasks, { showCompleted, focusedTaskId, filterToFocused }),
-    [isOrchestration, liveAgent, chief, tasks, showCompleted, focusedTaskId, filterToFocused],
+    () => buildTaskDrivenGraph(chief, tasks, {
+      mode: isOrchestration ? "orchestration" : "focus",
+      focusAgentId: isOrchestration ? chief.id : liveAgent.id,
+      showCompleted,
+      focusedTaskId,
+      filterToFocused,
+    }),
+    [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused],
   );
 
   const decoratedNodes = useMemo<Node[]>(() => {
@@ -601,13 +578,12 @@ function FlowEngineInner() {
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
       <MetricsStrip agentId={selectedId} tick={tick} mounted={mounted} activeTasks={activeTaskCount} />
 
-      {/* Breadcrumb / mode bar */}
       <div className="panel border-b border-border px-4 py-2 flex items-center gap-2 text-xs flex-wrap">
         {isOrchestration ? (
           <>
             <span className="text-mono uppercase text-[10px] text-muted-foreground">Mode</span>
             <span className="text-yellow text-mono">Orchestration</span>
-            <span className="text-muted-foreground">— Chief delegating {activeTaskCount} active task{activeTaskCount === 1 ? "" : "s"}</span>
+            <span className="text-muted-foreground">— {activeTaskCount} active task{activeTaskCount === 1 ? "" : "s"} drive the graph</span>
           </>
         ) : (
           <>
@@ -622,7 +598,6 @@ function FlowEngineInner() {
           </>
         )}
 
-        {/* Filter controls */}
         <div className="ml-auto flex items-center gap-2">
           <Filter className="w-3 h-3 text-muted-foreground" />
           <button
@@ -650,7 +625,6 @@ function FlowEngineInner() {
       </div>
 
       <div className="flex-1 grid grid-cols-[200px_1fr] min-h-0">
-        {/* Agent rail */}
         <aside className="panel border-r border-border p-3 overflow-y-auto">
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-mono mb-2 px-1">Hierarchy</div>
           {AGENTS.map((a) => {
@@ -684,7 +658,6 @@ function FlowEngineInner() {
           })}
         </aside>
 
-        {/* Graph */}
         <div className="relative min-w-0">
           <ReactFlow
             nodes={nodes}
@@ -711,7 +684,6 @@ function FlowEngineInner() {
                 return;
               }
               if (node.type === "task") {
-                // Open the task in Kanban
                 const data = node.data as { id?: string };
                 const taskId = data.id;
                 if (taskId) {
@@ -760,12 +732,11 @@ function FlowEngineInner() {
           </div>
 
           <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
-            Drag nodes to rearrange · Click a task to open it in Kanban · Reset layout anytime
+            Tasks drive the graph · Tools and memory only appear when actively used · Click a task to open it in Kanban
           </div>
         </div>
       </div>
 
-      {/* Bottom log drawer */}
       <div className={cn("panel border-t border-border transition-[height]", drawerOpen ? "h-[160px]" : "h-[36px]")}>
         <button onClick={() => setDrawerOpen((o) => !o)} className="w-full h-9 px-4 flex items-center justify-between text-xs text-muted-foreground hover:text-foreground">
           <span className="text-mono uppercase tracking-wider">Live log — {selected.name}</span>
