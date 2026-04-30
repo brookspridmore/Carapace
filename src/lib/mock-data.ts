@@ -598,3 +598,50 @@ export const FILE_TREE: FileNode[] = [
     ],
   },
 ];
+
+// ---------- Orchestration / Flow extensions ----------
+
+export interface Delegation {
+  id: string;
+  fromAgentId: AgentId;
+  toAgentId: AgentId;
+  taskId: string;
+  status: "active" | "blocked" | "review" | "done";
+  startedAt: string;
+}
+
+export const DELEGATIONS: Delegation[] = [
+  { id: "d-001", fromAgentId: "chief", toAgentId: "researcher", taskId: "t-002", status: "active", startedAt: iso(-2) },
+  { id: "d-002", fromAgentId: "chief", toAgentId: "marketer",   taskId: "t-003", status: "review", startedAt: iso(-4) },
+  { id: "d-003", fromAgentId: "chief", toAgentId: "builder",    taskId: "t-004", status: "active", startedAt: iso(-1) },
+  { id: "d-004", fromAgentId: "chief", toAgentId: "ops",        taskId: "t-005", status: "blocked", startedAt: iso(-5) },
+];
+
+export interface MemoryEvent {
+  id: string;
+  agentId: AgentId;
+  kind: "read" | "write_candidate" | "snapshot" | "dream";
+  ref: string;
+  note?: string;
+  ts: string;
+}
+
+export const MEMORY_EVENTS: MemoryEvent[] = [
+  { id: "ev-1", agentId: "chief",      kind: "read",            ref: "MEMORY.md#launch-priors", note: "context for Q4 launch", ts: iso(0) },
+  { id: "ev-2", agentId: "chief",      kind: "write_candidate", ref: "MEMORY.md (3 decisions)", note: "pending operator approval", ts: iso(0) },
+  { id: "ev-3", agentId: "chief",      kind: "snapshot",        ref: "snap_q4_launch", ts: iso(-1) },
+  { id: "ev-4", agentId: "marketer",   kind: "read",            ref: "MEMORY.md#brand-voice", ts: iso(0) },
+  { id: "ev-5", agentId: "marketer",   kind: "snapshot",        ref: "snap_email_seq", ts: iso(0) },
+  { id: "ev-6", agentId: "researcher", kind: "read",            ref: "DREAMS.md#pricing-cluster", ts: iso(0) },
+  { id: "ev-7", agentId: "researcher", kind: "write_candidate", ref: "MEMORY.md#competitor-C-free-tier", ts: iso(0) },
+  { id: "ev-8", agentId: "builder",    kind: "read",            ref: "MEMORY.md#webhook-conventions", ts: iso(0) },
+  { id: "ev-9", agentId: "ops",        kind: "dream",           ref: "DREAMS.md#rollback-recipes", ts: iso(-1) },
+];
+
+export function getDelegationForAgent(agentId: AgentId): Delegation | undefined {
+  return DELEGATIONS.find((d) => d.toAgentId === agentId);
+}
+
+export function getTaskById(id: string): Task | undefined {
+  return TASKS.find((t) => t.id === id);
+}
