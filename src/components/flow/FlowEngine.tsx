@@ -12,7 +12,7 @@ import {
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
-  RotateCcw, Maximize2, Lock, Unlock, Filter, Layers,
+  RotateCcw, Maximize2, Lock, Unlock, Filter, Layers, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
