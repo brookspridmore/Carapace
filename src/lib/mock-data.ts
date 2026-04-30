@@ -121,6 +121,8 @@ export const TASK_STATUSES: { id: TaskStatus; label: string }[] = [
 
 export type Priority = "high" | "medium" | "low";
 
+export type ToolKind = "exec" | "web" | "search" | "memory" | "file" | "tts";
+
 export interface Task {
   id: string;
   title: string;
@@ -136,6 +138,10 @@ export interface Task {
   outputs: string[];
   logTail: string[];
   createdAt: string;
+  // What this task is actually using right now — drives the Flow graph.
+  // Empty arrays mean "no execution activity of this kind for this task".
+  toolsUsed?: { kind: ToolKind; calls?: number; risky?: boolean }[];
+  memoryRefs?: string[];
 }
 
 function iso(daysFromNow: number) {
