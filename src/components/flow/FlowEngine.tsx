@@ -670,6 +670,10 @@ function FlowEngineInner() {
   useEffect(() => {
     let cancelled = false;
     setElkRunning(true);
+    // Seed with current baseGraph immediately so newly-added nodes (e.g. when
+    // switching from Low → Medium/High density) render without waiting for
+    // the async ELK pass. Their positions get refined when ELK resolves.
+    setElkNodes(baseGraph.nodes);
     layoutWithElk(baseGraph.nodes, baseGraph.edges, {
       direction: "RIGHT",
       nodeNodeSpacing: densityMode === "high" ? 110 : densityMode === "low" ? 70 : 90,
