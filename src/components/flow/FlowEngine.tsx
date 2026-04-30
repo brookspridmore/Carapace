@@ -555,13 +555,17 @@ function FlowEngineInner() {
   const tasks = useTaskStore((s) => s.tasks);
   const focusedTaskId = useTaskStore((s) => s.focusedTaskId);
   const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
+  const focusedSnapshotId = useTaskStore((s) => s.focusedSnapshotId);
+  const setFocusedSnapshot = useTaskStore((s) => s.setFocusedSnapshot);
+  const densityMode = useTaskStore((s) => s.densityMode);
+  const setDensityMode = useTaskStore((s) => s.setDensityMode);
   const flowFilterMode = useTaskStore((s) => s.flowFilterMode);
   const setFlowFilterMode = useTaskStore((s) => s.setFlowFilterMode);
   const showCompleted = useTaskStore((s) => s.showCompleted);
   const setShowCompleted = useTaskStore((s) => s.setShowCompleted);
 
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { task?: string };
+  const search = useSearch({ strict: false }) as { task?: string; snapshot?: string };
 
   const [selectedId, setSelectedId] = useState<AgentId>("chief");
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -589,6 +593,24 @@ function FlowEngineInner() {
     setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 80);
   }, [search?.task, tasks, setFocusedTask, fitView]);
 
+  // Snapshot deep-link / Resume from Snapshot
+  useEffect(() => {
+    const sid = search?.snapshot;
+    if (!sid) return;
+    const snap = getSnapshotById(sid);
+    if (!snap) return;
+    setFocusedSnapshot(sid);
+    if (snap.taskId) {
+      setFocusedTask(snap.taskId);
+      const t = tasks.find((x) => x.id === snap.taskId);
+      if (t) setSelectedId(t.agentId);
+    } else {
+      setSelectedId(snap.agentId);
+    }
+    // Snapshot resume implies high detail so next_actions read clearly
+    setDensityMode("high");
+    setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 100);
+  }, [search?.snapshot, tasks, setFocusedSnapshot, setFocusedTask, setDensityMode, fitView]);
   const chief = AGENTS.find((a) => a.id === "chief")!;
   const selected = AGENTS.find((a) => a.id === selectedId)!;
   const isOrchestration = selectedId === "chief";
@@ -601,6 +623,7 @@ function FlowEngineInner() {
   }), [selected, tick, paused]);
 
   const filterToFocused = flowFilterMode === "selected" && !!focusedTaskId;
+  const focusedSnapshot = focusedSnapshotId ? getSnapshotById(focusedSnapshotId) ?? null : null;
 
   const baseGraph = useMemo(
     () => buildTaskDrivenGraph(chief, tasks, {
@@ -609,8 +632,10 @@ function FlowEngineInner() {
       showCompleted,
       focusedTaskId,
       filterToFocused,
+      density: densityMode,
+      focusedSnapshot,
     }),
-    [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused],
+    [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused, densityMode, focusedSnapshot],
   );
 
   const decoratedNodes = useMemo<Node[]>(() => {
