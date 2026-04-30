@@ -809,10 +809,23 @@ function FlowEngineInner() {
           </ReactFlow>
 
           <div className="absolute top-3 right-3 flex items-center gap-2">
+            <button
+              onClick={() => setAutoLayout(!autoLayout)}
+              className={cn("px-2.5 py-1 rounded-md panel border text-xs flex items-center gap-1.5",
+                autoLayout ? "border-yellow/60 text-yellow" : "border-border hover:border-yellow/60")}
+              title={autoLayout ? "Auto Layout ON — nodes snap to lanes" : "Auto Layout OFF — manual positions preserved"}
+            >
+              <Sparkles className="w-3 h-3" />
+              Auto Layout {autoLayout ? "ON" : "OFF"}
+            </button>
             <button onClick={handleFitView} className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60" title="Fit all nodes in view">
               <Maximize2 className="w-3 h-3" /> Fit View
             </button>
-            <button onClick={handleResetLayout} className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60" title="Restore default layout">
+            <button
+              onClick={() => { setAutoLayout(true); handleResetLayout(); }}
+              className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
+              title="Rebuild layout from scratch"
+            >
               <RotateCcw className="w-3 h-3" /> Reset Layout
             </button>
             <button
@@ -831,7 +844,7 @@ function FlowEngineInner() {
           </div>
 
           <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
-            Tasks drive the graph · Tools and memory only appear when actively used · Click a task to open it in Kanban
+            Each task is its own lane · Drag nodes to rearrange · Reset Layout anytime
           </div>
         </div>
       </div>
