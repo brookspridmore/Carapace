@@ -61,12 +61,12 @@ const toolStroke = (kind: string) =>
 function buildOrchestrationGraph(chief: Agent): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
-  const cx = 540, cy = 280;
+  const cx = 640, cy = 260;
 
   nodes.push({
     id: `agent-${chief.id}`,
     type: "agent",
-    position: { x: cx, y: cy - 110 },
+    position: { x: cx, y: cy - 140 },
     data: { ...chief } as unknown as Record<string, unknown>,
     draggable: true,
   });
@@ -76,7 +76,7 @@ function buildOrchestrationGraph(chief: Agent): { nodes: Node[]; edges: Edge[] }
     const id = `input-${inp.kind}`;
     nodes.push({
       id, type: "input",
-      position: { x: 60, y: 60 + i * 70 },
+      position: { x: 40, y: 40 + i * 80 },
       data: { ...inp } as unknown as Record<string, unknown>,
     });
     const active = i === 0 || i === 1;
@@ -90,17 +90,19 @@ function buildOrchestrationGraph(chief: Agent): { nodes: Node[]; edges: Edge[] }
 
   // Subagents arranged in an arc below the chief, with task nodes between
   const subs = AGENTS.filter((a) => a.parentId === chief.id);
-  const baseX = 140;
-  const stepX = (1100 - baseX) / Math.max(1, subs.length - 1);
-  const subY = cy + 280;
-  const taskY = cy + 110;
+  const baseX = 220;
+  const stepX = 320; // wider spacing between branches
+  const subY = cy + 360;
+  const taskY = cy + 140;
 
   subs.forEach((sub, i) => {
     const sx = baseX + i * stepX;
+    // Stagger every other subagent vertically to avoid label/edge crowding
+    const stagger = (i % 2) * 70;
     const subNodeId = `agent-${sub.id}`;
     nodes.push({
       id: subNodeId, type: "agent",
-      position: { x: sx, y: subY },
+      position: { x: sx, y: subY + stagger },
       data: { ...sub, compact: true } as unknown as Record<string, unknown>,
     });
 
@@ -111,7 +113,7 @@ function buildOrchestrationGraph(chief: Agent): { nodes: Node[]; edges: Edge[] }
         const taskId = `task-${task.id}`;
         nodes.push({
           id: taskId, type: "task",
-          position: { x: sx - 10, y: taskY },
+          position: { x: sx - 10, y: taskY + stagger / 2 },
           data: {
             title: task.title,
             status: task.status,
