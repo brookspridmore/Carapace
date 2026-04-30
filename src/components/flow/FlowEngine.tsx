@@ -55,13 +55,13 @@ function taskEdgeStyle(t: Task) {
   return { stroke: C.delegation, dashed: false, animated: true, label: "delegated" };
 }
 
-function taskNodeData(t: Task, focused: boolean) {
+function taskNodeData(t: Task, focused: boolean, agentName?: string) {
   return {
     id: t.id,
     title: t.title,
     status: t.status,
     priority: t.priority,
-    agentName: AGENTS.find((a) => a.id === t.agentId)?.name,
+    agentName: agentName ?? AGENTS.find((a) => a.id === t.agentId)?.name,
     hasSnapshot: !!t.snapshotId,
     hasConversation: !!t.conversationId,
     needsReview: t.status === "needs_review",

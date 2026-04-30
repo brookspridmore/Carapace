@@ -185,6 +185,8 @@ function DraggableCard({ task, onSelect, highlighted }: { task: Task; onSelect: 
 
 function Card({ task, dragging = false, highlighted = false }: { task: Task; dragging?: boolean; highlighted?: boolean }) {
   const agent = AGENTS.find((a) => a.id === task.agentId);
+  const labelMap = useAgentLabelMap();
+  const agentName = labelMap[task.agentId] ?? agent?.name ?? task.agentId;
   const subDone = task.subtasks.filter((s) => s.done).length;
   return (
     <div
@@ -201,9 +203,9 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
       <div className="mt-2 flex items-center justify-between text-[10px] text-mono text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded-full bg-yellow/20 text-yellow flex items-center justify-center text-[9px] font-semibold uppercase">
-            {agent?.name.slice(0, 1)}
+            {agentName.slice(0, 1)}
           </div>
-          <span>{agent?.name}</span>
+          <span>{agentName}</span>
         </div>
         {task.dueDate && (
           <span>{format(new Date(task.dueDate), "MMM d")}</span>
