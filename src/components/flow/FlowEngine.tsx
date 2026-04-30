@@ -77,15 +77,34 @@ function taskNodeData(t: Task, focused: boolean) {
 // Task-driven graph builder
 // ====================================================================
 //
-// The graph is assembled FROM tasks. Each active task contributes a
-// self-contained execution path:
+// Deterministic LANE-BASED layout.
 //
-//   Chief → Task → Subagent → (tools used) / (memory refs) / (outputs) / (approvals)
+// Each visible task gets its own horizontal LANE. Within a lane, nodes flow
+// strictly left → right at fixed columns:
 //
-// Agent nodes are pure routing. Tools/memory/outputs only appear when an
-// active task actually uses them. A subagent with no active tasks is
-// rendered dim and unconnected — it represents available capacity, not
-// active execution.
+//   COL_CHIEF → COL_TASK → COL_SUB → COL_FANOUT (tools / memory / outputs / approvals)
+//
+// Lane Y is computed deterministically from a stable index so layout never
+// jumps between renders. Side nodes inside the fan-out column are stacked
+// within the lane height so two lanes never collide.
+
+// ---------- layout constants ----------
+const COL = {
+  inputs:   60,
+  chief:    320,
+  task:     560,
+  sub:      820,
+  fanoutA: 1080,  // tools / approvals (top half of fan-out)
+  fanoutB: 1340,  // memory / snapshot / next-actions (right of A)
+  output:  1080,  // outputs share fan-out A column but stack below tools
+};
+const LANE_HEIGHT = {
+  low:    140,
+  medium: 180,
+  high:   240,
+} as const;
+const CHIEF_Y_OFFSET = 40;       // chief sits visually centered relative to lanes
+const FAN_ROW_GAP   = 64;        // vertical gap between stacked side nodes inside a lane
 
 type BuildOpts = {
   showCompleted: boolean;
