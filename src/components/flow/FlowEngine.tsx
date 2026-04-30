@@ -888,7 +888,8 @@ function FlowEngineInner() {
           </div>
 
           <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
-            Each task is its own lane · Drag nodes to rearrange · Reset Layout anytime
+            Layout: ELK layered · Drag nodes to rearrange · Reset Layout anytime
+            {elkRunning ? " · laying out…" : ""}
           </div>
         </div>
       </div>
