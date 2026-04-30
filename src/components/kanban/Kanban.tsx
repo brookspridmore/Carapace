@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent, useDroppable,
 } from "@dnd-kit/core";
 import { useDraggable } from "@dnd-kit/core";
 import {
-  TASKS, TASK_STATUSES, AGENTS, type Task, type TaskStatus, type Priority,
+  TASK_STATUSES, AGENTS, type Task, type TaskStatus, type Priority,
 } from "@/lib/mock-data";
-import { Paperclip, Camera, MessagesSquare, GitBranch, X, Plus, Filter } from "lucide-react";
+import { Paperclip, Camera, MessagesSquare, GitBranch, X, Plus, Filter, GitMerge } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useTaskStore } from "@/lib/task-store";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "bg-coral",
@@ -18,13 +20,28 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 };
 
 export function Kanban() {
-  const [tasks, setTasks] = useState<Task[]>(() => TASKS.map((t) => ({ ...t })));
+  const tasks = useTaskStore((s) => s.tasks);
+  const updateTask = useTaskStore((s) => s.updateTask);
+  const moveTask = useTaskStore((s) => s.moveTask);
+  const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
+  const focusedTaskId = useTaskStore((s) => s.focusedTaskId);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { task?: string };
   const [active, setActive] = useState<Task | null>(null);
   const [selected, setSelected] = useState<Task | null>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  // Honor ?task=<id> deep-link from Flow
+  useEffect(() => {
+    const id = search?.task ?? focusedTaskId;
+    if (id) {
+      const t = tasks.find((x) => x.id === id);
+      if (t) setSelected(t);
+    }
+  }, [search?.task, focusedTaskId, tasks]);
 
   const filtered = useMemo(() => tasks.filter((t) =>
     (filterAgent === "all" || t.agentId === filterAgent) &&
@@ -48,7 +65,12 @@ export function Kanban() {
     setActive(null);
     if (!e.over) return;
     const newStatus = e.over.id as TaskStatus;
-    setTasks((prev) => prev.map((t) => t.id === e.active.id ? { ...t, status: newStatus } : t));
+    moveTask(e.active.id as string, newStatus);
+  }
+
+  function openInFlow(task: Task) {
+    setFocusedTask(task.id);
+    navigate({ to: "/", search: { task: task.id } as never });
   }
 
   return (
@@ -89,7 +111,7 @@ export function Kanban() {
         <div className="flex-1 overflow-x-auto">
           <div className="flex gap-3 p-4 h-full min-w-max">
             {TASK_STATUSES.map((col) => (
-              <Column key={col.id} status={col.id} label={col.label} tasks={grouped[col.id]} onSelect={setSelected} />
+              <Column key={col.id} status={col.id} label={col.label} tasks={grouped[col.id]} onSelect={setSelected} focusedTaskId={focusedTaskId} />
             ))}
           </div>
         </div>
@@ -98,16 +120,20 @@ export function Kanban() {
         </DragOverlay>
       </DndContext>
 
-      {selected && <TaskDrawer task={selected} onClose={() => setSelected(null)} onUpdate={(t) => {
-        setTasks((prev) => prev.map((x) => x.id === t.id ? t : x));
-        setSelected(t);
-      }} />}
+      {selected && (
+        <TaskDrawer
+          task={selected}
+          onClose={() => setSelected(null)}
+          onUpdate={(t) => { updateTask(t); setSelected(t); }}
+          onOpenInFlow={openInFlow}
+        />
+      )}
     </div>
   );
 }
 
-function Column({ status, label, tasks, onSelect }: {
-  status: TaskStatus; label: string; tasks: Task[]; onSelect: (t: Task) => void;
+function Column({ status, label, tasks, onSelect, focusedTaskId }: {
+  status: TaskStatus; label: string; tasks: Task[]; onSelect: (t: Task) => void; focusedTaskId: string | null;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
@@ -131,14 +157,14 @@ function Column({ status, label, tasks, onSelect }: {
           </div>
         )}
         {tasks.map((t) => (
-          <DraggableCard key={t.id} task={t} onSelect={onSelect} />
+          <DraggableCard key={t.id} task={t} onSelect={onSelect} highlighted={t.id === focusedTaskId} />
         ))}
       </div>
     </div>
   );
 }
 
-function DraggableCard({ task, onSelect }: { task: Task; onSelect: (t: Task) => void }) {
+function DraggableCard({ task, onSelect, highlighted }: { task: Task; onSelect: (t: Task) => void; highlighted?: boolean }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id });
   const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` } : undefined;
   return (
@@ -150,12 +176,12 @@ function DraggableCard({ task, onSelect }: { task: Task; onSelect: (t: Task) => 
       onClick={() => onSelect(task)}
       className={cn("cursor-grab active:cursor-grabbing", isDragging && "opacity-30")}
     >
-      <Card task={task} />
+      <Card task={task} highlighted={highlighted} />
     </div>
   );
 }
 
-function Card({ task, dragging = false }: { task: Task; dragging?: boolean }) {
+function Card({ task, dragging = false, highlighted = false }: { task: Task; dragging?: boolean; highlighted?: boolean }) {
   const agent = AGENTS.find((a) => a.id === task.agentId);
   const subDone = task.subtasks.filter((s) => s.done).length;
   return (
@@ -163,6 +189,7 @@ function Card({ task, dragging = false }: { task: Task; dragging?: boolean }) {
       className={cn(
         "surface rounded-md border border-border p-2.5 hover:border-yellow/40 transition-colors",
         dragging && "shadow-2xl border-yellow/60 rotate-1",
+        highlighted && "border-yellow ring-1 ring-yellow/40",
       )}
     >
       <div className="flex items-start gap-2">
