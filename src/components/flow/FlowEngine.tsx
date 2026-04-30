@@ -12,7 +12,7 @@ import {
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
-  RotateCcw, Maximize2, Lock, Unlock, Filter, Layers,
+  RotateCcw, Maximize2, Lock, Unlock, Filter, Layers, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -36,10 +36,6 @@ const INPUT_DEFS: { kind: "human" | "telegram" | "terminal" | "api" | "cron"; la
   { kind: "telegram", label: "Telegram", rate: "1 msg/min" },
   { kind: "api", label: "API", rate: "0.4 req/s" },
   { kind: "cron", label: "Cron", rate: "next 14m" },
-];
-
-const INFRA_DEFS: { kind: "openclaw"; label: string; meta?: string }[] = [
-  { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" },
 ];
 
 const toolStroke = (kind: ToolKind) =>
@@ -77,15 +73,34 @@ function taskNodeData(t: Task, focused: boolean) {
 // Task-driven graph builder
 // ====================================================================
 //
-// The graph is assembled FROM tasks. Each active task contributes a
-// self-contained execution path:
+// Deterministic LANE-BASED layout.
 //
-//   Chief → Task → Subagent → (tools used) / (memory refs) / (outputs) / (approvals)
+// Each visible task gets its own horizontal LANE. Within a lane, nodes flow
+// strictly left → right at fixed columns:
 //
-// Agent nodes are pure routing. Tools/memory/outputs only appear when an
-// active task actually uses them. A subagent with no active tasks is
-// rendered dim and unconnected — it represents available capacity, not
-// active execution.
+//   COL_CHIEF → COL_TASK → COL_SUB → COL_FANOUT (tools / memory / outputs / approvals)
+//
+// Lane Y is computed deterministically from a stable index so layout never
+// jumps between renders. Side nodes inside the fan-out column are stacked
+// within the lane height so two lanes never collide.
+
+// ---------- layout constants ----------
+const COL = {
+  inputs:   60,
+  chief:    320,
+  task:     560,
+  sub:      820,
+  fanoutA: 1080,  // tools / approvals (top half of fan-out)
+  fanoutB: 1340,  // memory / snapshot / next-actions (right of A)
+  output:  1080,  // outputs share fan-out A column but stack below tools
+};
+const LANE_HEIGHT = {
+  low:    140,
+  medium: 180,
+  high:   240,
+} as const;
+const CHIEF_Y_OFFSET = 40;       // chief sits visually centered relative to lanes
+const FAN_ROW_GAP   = 64;        // vertical gap between stacked side nodes inside a lane
 
 type BuildOpts = {
   showCompleted: boolean;
@@ -120,9 +135,35 @@ function buildTaskDrivenGraph(
 
   const visible = selectVisibleTasks(tasks, opts);
 
-  // --- 1. Chief always present at the top center (orchestrator routing node)
-  const chiefX = opts.mode === "orchestration" ? 720 : 80;
-  const chiefY = opts.mode === "orchestration" ? 80 : 40;
+  // ---- Stable lane ordering ----
+  // Sort tasks deterministically so layout never jumps. Sort by:
+  //   1) subagent column order (chief's children, then chief's own tasks)
+  //   2) status priority (running > needs_review > assigned > blocked > done/failed)
+  //   3) task id
+  const subs = AGENTS.filter((a) => a.parentId === chief.id);
+  const subOrder: AgentId[] = [chief.id, ...subs.map((s) => s.id)];
+  const subRank = (id: AgentId) => {
+    const idx = subOrder.indexOf(id);
+    return idx === -1 ? 999 : idx;
+  };
+  const statusRank: Record<string, number> = {
+    running: 0, needs_review: 1, assigned: 2, blocked: 3, done: 4, failed: 5,
+  };
+  const sortedTasks = [...visible].sort((a, b) => {
+    const sa = subRank(a.agentId) - subRank(b.agentId);
+    if (sa !== 0) return sa;
+    const st = (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+    if (st !== 0) return st;
+    return a.id.localeCompare(b.id);
+  });
+
+  const laneH = LANE_HEIGHT[opts.density];
+  const laneCount = Math.max(1, sortedTasks.length);
+  const totalH = laneCount * laneH;
+
+  // ---- Chief anchor (vertically centered against the stack of lanes) ----
+  const chiefX = opts.mode === "orchestration" ? COL.chief : COL.chief;
+  const chiefY = CHIEF_Y_OFFSET + Math.max(0, (totalH - 80) / 2);
   pushNode({
     id: `agent-${chief.id}`, type: "agent",
     position: { x: chiefX, y: chiefY },
@@ -131,61 +172,52 @@ function buildTaskDrivenGraph(
       : ({ ...chief, compact: true, dim: true } as unknown as Record<string, unknown>),
   });
 
-  // --- 2. Inputs feed Chief (orchestration) or focused agent (focus)
-  // These are part of the runtime, not a task — but we only show 2 by default
-  // to avoid implying capability where none is in use.
-  if (opts.mode === "orchestration") {
-    INPUT_DEFS.slice(0, 2).forEach((inp, i) => {
-      const id = `input-${inp.kind}`;
-      pushNode({
-        id, type: "input",
-        position: { x: 60, y: 40 + i * 80 },
-        data: { ...inp } as unknown as Record<string, unknown>,
-      });
-      edges.push({
-        id: `e-${id}-chief`, source: id, target: `agent-${chief.id}`,
-        animated: true,
-        style: { stroke: C.tool, strokeWidth: 1.2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: C.tool },
-      });
+  // ---- Inputs feed Chief (orchestration) or focused agent (focus) ----
+  INPUT_DEFS.slice(0, 2).forEach((inp, i) => {
+    const id = `input-${inp.kind}`;
+    pushNode({
+      id, type: "input",
+      position: { x: COL.inputs, y: chiefY - 60 + i * 90 },
+      data: { ...inp } as unknown as Record<string, unknown>,
     });
-  }
-
-  // --- 3. Group visible tasks by their owning subagent
-  const subs = AGENTS.filter((a) => a.parentId === chief.id);
-  const subOrder: AgentId[] = subs.map((s) => s.id);
-  const tasksByAgent = new Map<AgentId, Task[]>();
-  subOrder.forEach((id) => tasksByAgent.set(id, []));
-  visible
-    .filter((t) => t.agentId !== chief.id)
-    .forEach((t) => {
-      const list = tasksByAgent.get(t.agentId);
-      if (list) list.push(t);
+    const target = opts.mode === "orchestration"
+      ? `agent-${chief.id}`
+      : `agent-${opts.focusAgentId}`;
+    edges.push({
+      id: `e-${id}-${target}`, source: id, target,
+      animated: true,
+      style: { stroke: C.tool, strokeWidth: 1.2 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.tool },
     });
+  });
 
-  // Lay subagents in columns; only render a subagent if it has visible work
-  // OR (in orchestration view) we always show the org so operators understand routing.
-  const colBaseX = 220;
-  const colStepX = 360;
-  const subY = opts.mode === "orchestration" ? 720 : 0; // unused in focus mode
-  const taskRowY = opts.mode === "orchestration" ? 280 : 100;
-  const taskRowStepY = 180;
+  // ---- Subagent nodes: one per subagent, vertically positioned at the
+  //      MEAN of all its lanes (so the node "anchors" its task group). ----
+  const subToLanes = new Map<AgentId, number[]>();
+  sortedTasks.forEach((t, i) => {
+    const arr = subToLanes.get(t.agentId) ?? [];
+    arr.push(i);
+    subToLanes.set(t.agentId, arr);
+  });
+
+  const renderedAgentIds = new Set<AgentId>();
 
   if (opts.mode === "orchestration") {
-    subs.forEach((sub, i) => {
-      const subTasks = tasksByAgent.get(sub.id) ?? [];
-      const sx = colBaseX + i * colStepX;
-      const stagger = (i % 2) * 60;
-      const hasWork = subTasks.some(isActiveTask);
+    subs.forEach((sub) => {
+      const lanes = subToLanes.get(sub.id) ?? [];
+      const hasWork = lanes.length > 0;
+      const yMean = hasWork
+        ? (lanes.reduce((a, b) => a + b, 0) / lanes.length) * laneH + laneH / 2
+        : chiefY + 200; // park empty subagents below the chief
       pushNode({
         id: `agent-${sub.id}`, type: "agent",
-        position: { x: sx, y: subY + stagger },
+        position: { x: COL.sub, y: yMean - 30 },
         data: { ...sub, compact: true, dim: !hasWork } as unknown as Record<string, unknown>,
       });
+      renderedAgentIds.add(sub.id);
 
-      if (subTasks.length === 0) {
-        // No active task → no execution path. Show a faint routing line so
-        // hierarchy is still visible, but no tools/memory/outputs.
+      if (!hasWork) {
+        // Faint routing line so hierarchy is still visible.
         edges.push({
           id: `e-chief-agent-${sub.id}`,
           source: `agent-${chief.id}`, target: `agent-${sub.id}`,
@@ -193,127 +225,81 @@ function buildTaskDrivenGraph(
           markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
         });
       }
-
-      // For each task, render its execution path
-      subTasks.forEach((task, ti) => {
-        // Anti-overlap: stagger task X slightly per index, and add larger Y gap as
-        // density increases (more side nodes per task = need more vertical room).
-        const lateralOffset = (ti % 2 === 0 ? -16 : 16);
-        const ySlot = taskRowY + ti * (taskRowStepY + (opts.density === "high" ? 60 : opts.density === "low" ? -40 : 0)) + stagger / 2;
-        renderTaskPath({
-          task,
-          chiefId: chief.id,
-          subAgentId: sub.id,
-          taskPos: { x: sx - 10 + lateralOffset, y: ySlot },
-          sidePos: { x: sx + 240, yStart: ySlot - 30 },
-          memoryPos: { x: sx + 240, yStart: ySlot + 90 },
-          focusedTaskId: opts.focusedTaskId,
-          density: opts.density,
-          focusedSnapshot: opts.focusedSnapshot,
-          pushNode, edges,
-        });
-      });
     });
   } else {
-    // ----- Focus mode -----
-    // Center the focused agent. Only render that agent + its visible tasks.
+    // Focus mode: render the focused agent in the subagent column.
     const agent = AGENTS.find((a) => a.id === opts.focusAgentId)!;
-    const cx = 600, cy = 260;
     pushNode({
       id: `agent-${agent.id}`, type: "agent",
-      position: { x: cx, y: cy },
+      position: { x: COL.sub, y: chiefY - 30 },
       data: { ...agent } as unknown as Record<string, unknown>,
     });
-
-    // Inputs (slim, to the left of the focused agent — only 2)
-    INPUT_DEFS.slice(0, 2).forEach((inp, i) => {
-      const id = `input-${inp.kind}`;
-      pushNode({
-        id, type: "input",
-        position: { x: 60, y: 220 + i * 80 },
-        data: { ...inp } as unknown as Record<string, unknown>,
-      });
-      edges.push({
-        id: `e-${id}-agent`, source: id, target: `agent-${agent.id}`,
-        animated: agent.status !== "idle",
-        style: { stroke: agent.status !== "idle" ? C.tool : C.muted, strokeWidth: 1.2 },
-        markerEnd: { type: MarkerType.ArrowClosed, color: agent.status !== "idle" ? C.tool : C.muted },
-      });
-    });
-
-    // Tasks stack between chief and focused agent
-    const taskColX = 320;
-    visible.forEach((task, i) => {
-      const ty = 80 + i * (opts.density === "high" ? 200 : opts.density === "low" ? 110 : 150);
-      renderTaskPath({
-        task,
-        chiefId: chief.id,
-        subAgentId: agent.id,
-        taskPos: { x: taskColX, y: ty },
-        sidePos: { x: cx + 300, yStart: ty - 20 },
-        memoryPos: { x: cx + 300, yStart: ty + 110 },
-        focusedTaskId: opts.focusedTaskId,
-        density: opts.density,
-        focusedSnapshot: opts.focusedSnapshot,
-        pushNode, edges,
-      });
-    });
-
-    // OpenClaw runtime sits at the bottom — agent connects to it because all
-    // execution flows through OpenClaw.
-    INFRA_DEFS.forEach((infra, i) => {
-      const id = `infra-${infra.kind}`;
-      pushNode({
-        id, type: "infra",
-        position: { x: cx - 80 + i * 240, y: cy + Math.max(400, visible.length * 130 + 200) },
-        data: { ...infra } as unknown as Record<string, unknown>,
-      });
-      edges.push({
-        id: `e-agent-${id}`, source: `agent-${agent.id}`, target: id,
-        style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
-      });
-    });
+    renderedAgentIds.add(agent.id);
   }
 
-  // --- Orchestration mode: bottom OpenClaw runtime, single shared node
-  if (opts.mode === "orchestration") {
-    const id = `infra-openclaw`;
-    pushNode({
-      id, type: "infra",
-      position: { x: 720, y: subY + 200 },
-      data: { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" } as unknown as Record<string, unknown>,
+  // ---- One lane per task ----
+  sortedTasks.forEach((task, laneIdx) => {
+    const laneY = laneIdx * laneH + laneH / 2 - 28; // task node visual height ~56
+    renderTaskPath({
+      task,
+      chiefId: chief.id,
+      subAgentId: opts.mode === "orchestration" ? task.agentId : opts.focusAgentId,
+      taskPos: { x: COL.task, y: laneY },
+      fanoutAX: COL.fanoutA,
+      fanoutBX: COL.fanoutB,
+      laneTopY: laneIdx * laneH + 20,
+      laneBottomY: (laneIdx + 1) * laneH - 20,
+      focusedTaskId: opts.focusedTaskId,
+      density: opts.density,
+      focusedSnapshot: opts.focusedSnapshot,
+      pushNode, edges,
     });
-    // Only connect from subagents that have visible work
-    subs.forEach((sub) => {
-      if ((tasksByAgent.get(sub.id)?.length ?? 0) === 0) return;
-      edges.push({
-        id: `e-${sub.id}-infra`, source: `agent-${sub.id}`, target: id,
-        style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
-        markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
-      });
+  });
+
+  // ---- OpenClaw runtime: single shared node, far right of all lanes ----
+  const infraId = `infra-openclaw`;
+  pushNode({
+    id: infraId, type: "infra",
+    position: { x: COL.fanoutB + 320, y: chiefY },
+    data: { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" } as unknown as Record<string, unknown>,
+  });
+  // Connect any rendered subagent that has work to OpenClaw
+  renderedAgentIds.forEach((aid) => {
+    if (aid === chief.id) return;
+    if ((subToLanes.get(aid)?.length ?? 0) === 0) return;
+    edges.push({
+      id: `e-${aid}-infra`, source: `agent-${aid}`, target: infraId,
+      style: { stroke: C.muted, strokeWidth: 1, strokeDasharray: "2 4" },
+      markerEnd: { type: MarkerType.ArrowClosed, color: C.muted },
     });
-  }
+  });
 
   return { nodes, edges };
 }
 
-// Render the per-task execution path:
-//   Chief → Task → Subagent  +  (tools / memory / outputs / approvals branching off task)
+// Render one task LANE.
+// Chief → Task → Subagent on a single horizontal line.
+// Tools/approvals stack downward in fan-out column A (within lane bounds).
+// Memory/snapshot/next-actions stack in fan-out column B.
 function renderTaskPath(args: {
   task: Task;
   chiefId: AgentId;
   subAgentId: AgentId;
   taskPos: { x: number; y: number };
-  sidePos: { x: number; yStart: number };
-  memoryPos: { x: number; yStart: number };
+  fanoutAX: number;
+  fanoutBX: number;
+  laneTopY: number;
+  laneBottomY: number;
   focusedTaskId: string | null;
   density: "low" | "medium" | "high";
   focusedSnapshot: Snapshot | null;
   pushNode: (n: Node) => void;
   edges: Edge[];
 }) {
-  const { task, chiefId, subAgentId, taskPos, sidePos, memoryPos, focusedTaskId, density, focusedSnapshot, pushNode, edges } = args;
+  const {
+    task, chiefId, subAgentId, taskPos, fanoutAX, fanoutBX,
+    laneTopY, laneBottomY, focusedTaskId, density, focusedSnapshot, pushNode, edges,
+  } = args;
   const taskId = `task-${task.id}`;
   const snapTaskFocus = focusedSnapshot?.taskId === task.id;
   const focused = task.id === focusedTaskId || snapTaskFocus;
@@ -359,12 +345,10 @@ function renderTaskPath(args: {
     markerEnd: { type: MarkerType.ArrowClosed, color: es.stroke },
   });
 
-  // ---- Tools used by THIS task (subagent → tool) ----
-  // Density:
-  //   low → no tool nodes (only delegation path)
-  //   medium → only risky tools (approval-gated)
-  //   high → all tools used
-  let sideY = sidePos.yStart;
+  // Fan-out columns: stack within the lane to prevent collision with neighbors.
+  // Column A (tools / approvals / outputs) and column B (memory / snapshots).
+  let aY = laneTopY;
+  let bY = laneTopY;
   const toolsToRender =
     density === "low" ? [] :
     density === "medium" ? (task.toolsUsed ?? []).filter((t) => t.risky) :
@@ -373,18 +357,18 @@ function renderTaskPath(args: {
     const toolId = `tool-${task.id}-${tool.kind}`;
     pushNode({
       id: toolId, type: "tool",
-      position: { x: sidePos.x, y: sideY },
+      position: { x: fanoutAX, y: aY },
       data: { kind: tool.kind, label: tool.kind, calls: tool.calls } as unknown as Record<string, unknown>,
     });
     const stroke = toolStroke(tool.kind);
     const active = task.status === "running" && (tool.calls ?? 0) > 0;
 
     if (tool.risky) {
-      // Approval gate between subagent and risky tool
+      // Approval gate sits to the LEFT of the risky tool, still inside the lane.
       const gateId = `apprtool-${task.id}-${tool.kind}`;
       pushNode({
         id: gateId, type: "approval",
-        position: { x: sidePos.x - 200, y: sideY + 20 },
+        position: { x: fanoutAX - 220, y: aY + 10 },
         data: { label: `Approve ${tool.kind}`, reason: "exec / risky action" } as unknown as Record<string, unknown>,
       });
       edges.push({
@@ -409,16 +393,17 @@ function renderTaskPath(args: {
         markerEnd: { type: MarkerType.ArrowClosed, color: active ? stroke : C.muted },
       });
     }
-    sideY += 80;
+    aY += FAN_ROW_GAP;
   });
 
   // ---- Outputs produced by this task (task → output) ----
-  // Hide outputs in low-density mode.
   if (task.outputs.length > 0 && density !== "low") {
     const oid = `out-${task.id}`;
+    // Place output below tools but clamp inside lane bounds.
+    const oy = Math.min(aY, laneBottomY - 40);
     pushNode({
       id: oid, type: "output",
-      position: { x: sidePos.x, y: sideY },
+      position: { x: fanoutAX, y: oy },
       data: {
         kind: "artifact",
         label: `${task.outputs.length} output${task.outputs.length === 1 ? "" : "s"}`,
@@ -431,7 +416,7 @@ function renderTaskPath(args: {
       style: { stroke: C.output, strokeWidth: 1.2, strokeDasharray: "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color: C.output },
     });
-    sideY += 70;
+    aY = oy + FAN_ROW_GAP;
   }
 
   // ---- Approval / blocked (task-level operator gates) ----
@@ -439,7 +424,7 @@ function renderTaskPath(args: {
     const aid = `appr-${task.id}`;
     pushNode({
       id: aid, type: "approval",
-      position: { x: sidePos.x, y: sideY },
+      position: { x: fanoutAX, y: Math.min(aY, laneBottomY - 40) },
       data: { label: "Needs Review", reason: "operator action" } as unknown as Record<string, unknown>,
     });
     edges.push({
@@ -447,13 +432,13 @@ function renderTaskPath(args: {
       animated: true, style: { stroke: C.approval, strokeWidth: 1.5 },
       markerEnd: { type: MarkerType.ArrowClosed, color: C.approval },
     });
-    sideY += 70;
+    aY += FAN_ROW_GAP;
   }
   if (task.status === "blocked") {
     const bid = `block-${task.id}`;
     pushNode({
       id: bid, type: "approval",
-      position: { x: sidePos.x, y: sideY },
+      position: { x: fanoutAX, y: Math.min(aY, laneBottomY - 40) },
       data: { label: "Blocked", reason: task.logTail[0] ?? "blocker" } as unknown as Record<string, unknown>,
     });
     edges.push({
@@ -461,19 +446,17 @@ function renderTaskPath(args: {
       style: { stroke: C.blocked, strokeWidth: 1.5, strokeDasharray: "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color: C.blocked },
     });
-    sideY += 70;
+    aY += FAN_ROW_GAP;
   }
 
   // ---- Memory refs used by this task (task → memory) ----
-  // Memory refs only render at high density.
-  let memY = memoryPos.yStart;
   const memRefsToRender = density === "high" ? (task.memoryRefs ?? []) : [];
   memRefsToRender.forEach((ref, i) => {
     const mid = `mem-${task.id}-${i}`;
     const isSnapshotRef = ref.startsWith("snap_");
     pushNode({
       id: mid, type: "memory",
-      position: { x: memoryPos.x + 200, y: memY },
+      position: { x: fanoutBX, y: bY },
       data: {
         kind: isSnapshotRef ? "snapshot" : "read",
         ref,
@@ -486,18 +469,17 @@ function renderTaskPath(args: {
       style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
     });
-    memY += 70;
+    bY += FAN_ROW_GAP;
   });
 
   // ---- Snapshot (task-level) — always shown if linked, regardless of density.
-  // Snapshots are operator-relevant state, not raw execution detail.
   if (task.snapshotId && density !== "low") {
     const snap = SNAPSHOTS.find((s) => s.id === task.snapshotId);
     const sid = `snap-${task.id}`;
     const snapFocused = !!focusedSnapshot && focusedSnapshot.id === task.snapshotId;
     pushNode({
       id: sid, type: "memory",
-      position: { x: memoryPos.x + 200, y: memY },
+      position: { x: fanoutBX, y: Math.min(bY, laneBottomY - 50) },
       data: {
         kind: "snapshot", ref: task.snapshotId,
         note: snap?.objective ? snap.objective.slice(0, 40) + (snap.objective.length > 40 ? "…" : "") : "linked snapshot",
@@ -514,7 +496,7 @@ function renderTaskPath(args: {
       style: { stroke: snapStroke, strokeWidth: snapFocused ? 2 : 1.2, strokeDasharray: snapFocused ? undefined : "4 4" },
       markerEnd: { type: MarkerType.ArrowClosed, color: snapStroke },
     });
-    memY += 90;
+    bY += FAN_ROW_GAP + 20;
 
     // Render snapshot's next_actions as primary path when this snapshot is focused
     if (snapFocused && snap) {
@@ -522,7 +504,7 @@ function renderTaskPath(args: {
         const naId = `na-${snap.id}-${idx}`;
         pushNode({
           id: naId, type: "output",
-          position: { x: memoryPos.x + 420, y: memY + idx * 70 - 30 },
+          position: { x: fanoutBX + 280, y: laneTopY + 20 + idx * FAN_ROW_GAP },
           data: { kind: "next_action", label: action, meta: `from ${snap.id}`, emphasized: true } as unknown as Record<string, unknown>,
         });
         edges.push({
@@ -563,6 +545,8 @@ function FlowEngineInner() {
   const setFlowFilterMode = useTaskStore((s) => s.setFlowFilterMode);
   const showCompleted = useTaskStore((s) => s.showCompleted);
   const setShowCompleted = useTaskStore((s) => s.setShowCompleted);
+  const autoLayout = useTaskStore((s) => s.autoLayout);
+  const setAutoLayout = useTaskStore((s) => s.setAutoLayout);
 
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { task?: string; snapshot?: string };
@@ -639,13 +623,15 @@ function FlowEngineInner() {
   );
 
   const decoratedNodes = useMemo<Node[]>(() => {
-    const ov = overrides[viewKey] ?? {};
+    // Auto Layout ON → ignore manual overrides, always use deterministic layout.
+    // Auto Layout OFF → respect user-dragged positions for this view.
+    const ov = autoLayout ? {} : (overrides[viewKey] ?? {});
     return baseGraph.nodes.map((n) => ({
       ...n,
       draggable: !layoutLocked,
       position: ov[n.id] ?? n.position,
     }));
-  }, [baseGraph.nodes, overrides, viewKey, layoutLocked]);
+  }, [baseGraph.nodes, overrides, viewKey, layoutLocked, autoLayout]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(decoratedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseGraph.edges);
@@ -776,6 +762,8 @@ function FlowEngineInner() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeDragStop={(_, node) => {
+              // Manual drag implies the operator wants to override layout.
+              if (autoLayout) setAutoLayout(false);
               setOverrides((o) => ({
                 ...o,
                 [viewKey]: { ...(o[viewKey] ?? {}), [node.id]: { x: node.position.x, y: node.position.y } },
@@ -821,10 +809,23 @@ function FlowEngineInner() {
           </ReactFlow>
 
           <div className="absolute top-3 right-3 flex items-center gap-2">
+            <button
+              onClick={() => setAutoLayout(!autoLayout)}
+              className={cn("px-2.5 py-1 rounded-md panel border text-xs flex items-center gap-1.5",
+                autoLayout ? "border-yellow/60 text-yellow" : "border-border hover:border-yellow/60")}
+              title={autoLayout ? "Auto Layout ON — nodes snap to lanes" : "Auto Layout OFF — manual positions preserved"}
+            >
+              <Sparkles className="w-3 h-3" />
+              Auto Layout {autoLayout ? "ON" : "OFF"}
+            </button>
             <button onClick={handleFitView} className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60" title="Fit all nodes in view">
               <Maximize2 className="w-3 h-3" /> Fit View
             </button>
-            <button onClick={handleResetLayout} className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60" title="Restore default layout">
+            <button
+              onClick={() => { setAutoLayout(true); handleResetLayout(); }}
+              className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
+              title="Rebuild layout from scratch"
+            >
               <RotateCcw className="w-3 h-3" /> Reset Layout
             </button>
             <button
@@ -843,7 +844,7 @@ function FlowEngineInner() {
           </div>
 
           <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
-            Tasks drive the graph · Tools and memory only appear when actively used · Click a task to open it in Kanban
+            Each task is its own lane · Drag nodes to rearrange · Reset Layout anytime
           </div>
         </div>
       </div>
