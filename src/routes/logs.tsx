@@ -4,6 +4,7 @@ import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { LOGS, AGENTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 
 const LEVEL_COLOR = { debug: "text-muted-foreground", info: "text-foreground", warn: "text-yellow", error: "text-coral" } as const;
 
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/logs")({
 function LogsPage() {
   const [level, setLevel] = useState<string>("all");
   const [agent, setAgent] = useState<string>("all");
+  const labelMap = useAgentLabelMap();
   const filtered = LOGS.filter((l) => (level === "all" || l.level === level) && (agent === "all" || l.agentId === agent));
   return (
     <AppShell title="Logs" subtitle="Live stream · filtered · audit-ready">
@@ -41,7 +43,7 @@ function LogsPage() {
           </select>
           <select value={agent} onChange={(e) => setAgent(e.target.value)} className="surface border border-border rounded-md px-2 py-1 text-xs">
             <option value="all">All agents</option>
-            {AGENTS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            {AGENTS.map((a) => <option key={a.id} value={a.id}>{labelMap[a.id] ?? a.name}</option>)}
           </select>
           <span className="ml-auto text-[10px] text-mono text-muted-foreground">{filtered.length} entries</span>
         </div>

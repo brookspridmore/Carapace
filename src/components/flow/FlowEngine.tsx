@@ -728,6 +728,7 @@ function FlowEngineInner() {
   const handleFitView = () => fitView({ padding: 0.15, duration: 300 });
 
   const activeTaskCount = tasks.filter(isActiveTask).length;
+  const labelMap = useAgentLabelMap();
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -826,7 +827,7 @@ function FlowEngineInner() {
                   a.status === "error" ? "bg-coral" : "bg-muted-foreground",
                 )}/>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium truncate">{a.name}</div>
+                  <div className="text-xs font-medium truncate">{labelMap[a.id] ?? a.name}</div>
                   <div className="text-[10px] text-muted-foreground truncate text-mono">{a.model}</div>
                 </div>
                 {taskCount > 0 && (

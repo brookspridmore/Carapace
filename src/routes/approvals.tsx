@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { APPROVALS, AGENTS, type ApprovalRequest } from "@/lib/mock-data";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 import { Check, X, Terminal, FileText, Settings, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/approvals")({
 
 function ApprovalsPage() {
   const [items, setItems] = useState<ApprovalRequest[]>(APPROVALS);
+  const labelMap = useAgentLabelMap();
   function decide(id: string, decision: "approve" | "deny") {
     setItems((prev) => prev.map((a) => a.id === id ? { ...a, status: decision === "approve" ? "approved" : "denied" } : a));
   }
@@ -35,7 +37,7 @@ function ApprovalsPage() {
       <div className="p-6 space-y-3 max-w-3xl">
         {items.map((a) => {
           const Icon = TYPE_ICON[a.type];
-          const agent = AGENTS.find((x) => x.id === a.agentId);
+          const agentName = labelMap[a.agentId] ?? AGENTS.find((x) => x.id === a.agentId)?.name ?? a.agentId;
           const decided = a.status !== "pending";
           return (
             <article key={a.id} className={cn("panel border rounded-lg overflow-hidden", decided ? "border-border opacity-60" : "border-border")}>
@@ -48,7 +50,7 @@ function ApprovalsPage() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className="text-[10px] uppercase text-mono text-muted-foreground tracking-wider">{a.type.replace("_", " ")}</span>
                       <span className="text-[10px] text-mono text-muted-foreground">·</span>
-                      <span className="text-[10px] text-mono text-muted-foreground">{agent?.name}</span>
+                      <span className="text-[10px] text-mono text-muted-foreground">{agentName}</span>
                     </div>
                     <div className="text-sm font-medium">{a.summary}</div>
                     <div className="text-xs text-muted-foreground mt-1">{a.details}</div>

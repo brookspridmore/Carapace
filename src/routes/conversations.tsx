@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CONVERSATIONS, AGENTS, type ConversationThread } from "@/lib/mock-data";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 import { Send, Terminal, Globe, MonitorSmartphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -24,6 +25,8 @@ export const Route = createFileRoute("/conversations")({
 function ConversationsPage() {
   const [active, setActive] = useState<ConversationThread>(CONVERSATIONS[0]);
   const [filter, setFilter] = useState<string>("all");
+  const labelMap = useAgentLabelMap();
+  const nameOf = (id?: string) => (id ? labelMap[id] ?? AGENTS.find((a) => a.id === id)?.name ?? id : "—");
   const filtered = filter === "all" ? CONVERSATIONS : CONVERSATIONS.filter((c) => c.channels.includes(filter as any));
   return (
     <AppShell title="Conversations" subtitle="Unified inbox · merged across channels">
@@ -48,7 +51,6 @@ function ConversationsPage() {
           </div>
           <ul>
             {filtered.map((c) => {
-              const agent = AGENTS.find((a) => a.id === c.agentId);
               const isActive = c.id === active.id;
               return (
                 <li key={c.id}>
@@ -61,7 +63,7 @@ function ConversationsPage() {
                       {c.unread > 0 && <span className="text-[10px] bg-yellow text-primary-foreground rounded-full px-1.5">{c.unread}</span>}
                     </div>
                     <div className="mt-1 flex items-center justify-between text-[10px] text-mono text-muted-foreground">
-                      <span>{agent?.name}</span>
+                      <span>{nameOf(c.agentId)}</span>
                       <div className="flex gap-1">
                         {c.channels.map((ch) => {
                           const Icon = CHANNEL_ICON[ch];
@@ -79,7 +81,7 @@ function ConversationsPage() {
           <div className="px-5 py-3 border-b border-border">
             <div className="text-sm font-semibold">{active.title}</div>
             <div className="text-[11px] text-muted-foreground text-mono">
-              {AGENTS.find((a) => a.id === active.agentId)?.name} · {active.channels.join(" · ")}
+              {nameOf(active.agentId)} · {active.channels.join(" · ")}
             </div>
           </div>
           <div className="flex-1 overflow-y-auto p-5 space-y-3">

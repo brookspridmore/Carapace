@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useTaskStore } from "@/lib/task-store";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "bg-coral",
@@ -21,6 +22,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 
 export function Kanban() {
   const tasks = useTaskStore((s) => s.tasks);
+  const labelMap = useAgentLabelMap();
   const updateTask = useTaskStore((s) => s.updateTask);
   const moveTask = useTaskStore((s) => s.moveTask);
   const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
@@ -87,7 +89,7 @@ export function Kanban() {
           className="surface border border-border rounded-md px-2 py-1 text-xs"
         >
           <option value="all">All agents</option>
-          {AGENTS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {AGENTS.map((a) => <option key={a.id} value={a.id}>{labelMap[a.id] ?? a.name}</option>)}
         </select>
         <select
           value={filterPriority}

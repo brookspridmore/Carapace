@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Copy } from "lucide-react";
+import { useAgentRegistry } from "@/lib/agent-registry";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -16,6 +17,10 @@ export const Route = createFileRoute("/settings")({
 });
 
 function SettingsPage() {
+  const configPath = useAgentRegistry((s) => s.openclawConfigPath);
+  const agentsPath = useAgentRegistry((s) => s.openclawAgentsPath);
+  const setConfigPath = useAgentRegistry((s) => s.setOpenClawConfigPath);
+  const setAgentsPath = useAgentRegistry((s) => s.setOpenClawAgentsPath);
   return (
     <AppShell title="Settings" subtitle="Operator preferences · OpenClaw connection">
       <PageHeader eyebrow="System" title="Settings" description="Configure how Carapace talks to OpenClaw and how it's exposed on your network." />
@@ -26,6 +31,30 @@ function SettingsPage() {
             Carapace proxies every OpenClaw call server-side. The browser never connects to OpenClaw directly.
             <br />
             <span className="text-mono">OPENCLAW_GATEWAY_URL</span> is accepted as an alias.
+          </p>
+        </Card>
+
+        <Card title="OpenClaw config bridge">
+          <label className="block mb-3">
+            <div className="text-[11px] text-mono text-muted-foreground mb-1">OPENCLAW_CONFIG_PATH</div>
+            <input
+              value={configPath}
+              onChange={(e) => setConfigPath(e.target.value)}
+              placeholder="/opt/openclaw/config.toml"
+              className="w-full surface border border-border rounded-md px-3 py-2 text-mono text-sm focus:outline-none focus:border-yellow/60"
+            />
+          </label>
+          <label className="block">
+            <div className="text-[11px] text-mono text-muted-foreground mb-1">OPENCLAW_AGENTS_PATH</div>
+            <input
+              value={agentsPath}
+              onChange={(e) => setAgentsPath(e.target.value)}
+              placeholder="/opt/openclaw/agents.toml"
+              className="w-full surface border border-border rounded-md px-3 py-2 text-mono text-sm focus:outline-none focus:border-yellow/60"
+            />
+          </label>
+          <p className="text-[11px] text-muted-foreground mt-2">
+            Carapace reads agent records from these files to populate the registry. If unset, the registry falls back to mock data. Writes happen only via the Agents page "Save to OpenClaw config" flow (with backup, validation, diff, and confirmation).
           </p>
         </Card>
 
