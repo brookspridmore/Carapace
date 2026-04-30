@@ -703,6 +703,30 @@ function FlowEngineInner() {
             <input type="checkbox" checked={showCompleted} onChange={(e) => setShowCompleted(e.target.checked)} className="accent-[var(--carapace-yellow)]" />
             show completed
           </label>
+
+          <span className="mx-1 h-4 w-px bg-border" />
+          <Layers className="w-3 h-3 text-muted-foreground" />
+          {(["low", "medium", "high"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setDensityMode(m)}
+              className={cn("px-2 py-0.5 rounded text-[11px] text-mono capitalize",
+                densityMode === m ? "bg-yellow/20 text-yellow" : "text-muted-foreground hover:text-foreground")}
+            >{m}</button>
+          ))}
+
+          {focusedSnapshot && (
+            <>
+              <span className="mx-1 h-4 w-px bg-border" />
+              <span className="text-[11px] text-mono text-yellow flex items-center gap-1">
+                snapshot · {focusedSnapshot.id}
+              </span>
+              <button onClick={() => setFocusedSnapshot(null)} className="text-[11px] text-coral hover:underline text-mono">
+                clear snapshot
+              </button>
+            </>
+          )}
+
           {focusedTaskId && (
             <button onClick={() => setFocusedTask(null)} className="text-[11px] text-coral hover:underline text-mono">
               clear focus
