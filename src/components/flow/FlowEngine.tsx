@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ReactFlow, Background, Controls, MiniMap, type Node, type Edge,
-  MarkerType, BackgroundVariant,
+  MarkerType, BackgroundVariant, useNodesState, useEdgesState, useReactFlow,
+  ReactFlowProvider,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { nodeTypes } from "./nodes";
@@ -9,7 +10,7 @@ import {
   AGENTS, DELEGATIONS, MEMORY_EVENTS, getTaskById,
   type Agent, type AgentId,
 } from "@/lib/mock-data";
-import { ChevronUp, ChevronDown, Pause, Play, ArrowLeft } from "lucide-react";
+import { ChevronUp, ChevronDown, Pause, Play, ArrowLeft, RotateCcw, Maximize2, Lock, Unlock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // ---------- color tokens ----------
