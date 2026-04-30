@@ -838,6 +838,7 @@ function FlowEngineInner() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            defaultEdgeOptions={{ type: "smoothstep" }}
             onNodeDragStop={(_, node) => {
               // Manual drag implies the operator wants to override layout.
               if (autoLayout) setAutoLayout(false);
