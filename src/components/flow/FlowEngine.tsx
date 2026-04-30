@@ -351,11 +351,23 @@ function buildFocusGraph(agent: Agent, chief: Agent): { nodes: Node[]; edges: Ed
 // ====================================================================
 
 export function FlowEngine() {
+  return (
+    <ReactFlowProvider>
+      <FlowEngineInner />
+    </ReactFlowProvider>
+  );
+}
+
+function FlowEngineInner() {
   const [selectedId, setSelectedId] = useState<AgentId>("chief");
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [paused, setPaused] = useState(false);
   const [tick, setTick] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [layoutLocked, setLayoutLocked] = useState(false);
+  // viewKey -> { nodeId -> {x,y} } overrides for user-dragged positions
+  const [overrides, setOverrides] = useState<Record<string, Record<string, { x: number; y: number }>>>({});
+  const { fitView } = useReactFlow();
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
@@ -367,6 +379,7 @@ export function FlowEngine() {
   const chief = AGENTS.find((a) => a.id === "chief")!;
   const selected = AGENTS.find((a) => a.id === selectedId)!;
   const isOrchestration = selectedId === "chief";
+  const viewKey = isOrchestration ? "orchestration" : `focus:${selectedId}`;
 
   const liveAgent: Agent = useMemo(() => ({
     ...selected,
@@ -374,10 +387,39 @@ export function FlowEngine() {
     contextPressure: Math.min(0.95, selected.contextPressure + (paused ? 0 : tick * 0.002)),
   }), [selected, tick, paused]);
 
-  const graph = useMemo(
+  const baseGraph = useMemo(
     () => isOrchestration ? buildOrchestrationGraph(liveAgent) : buildFocusGraph(liveAgent, chief),
     [isOrchestration, liveAgent, chief],
   );
+
+  // Apply per-view position overrides + global draggable/lock flags
+  const decoratedNodes = useMemo<Node[]>(() => {
+    const ov = overrides[viewKey] ?? {};
+    return baseGraph.nodes.map((n) => ({
+      ...n,
+      draggable: !layoutLocked,
+      position: ov[n.id] ?? n.position,
+    }));
+  }, [baseGraph.nodes, overrides, viewKey, layoutLocked]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(decoratedNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(baseGraph.edges);
+
+  // Sync when the underlying view (selectedId / mode / overrides / lock) changes
+  useEffect(() => { setNodes(decoratedNodes); }, [decoratedNodes, setNodes]);
+  useEffect(() => { setEdges(baseGraph.edges); }, [baseGraph.edges, setEdges]);
+
+  const handleResetLayout = () => {
+    setOverrides((o) => {
+      const next = { ...o };
+      delete next[viewKey];
+      return next;
+    });
+    // re-fit on next paint
+    setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 50);
+  };
+
+  const handleFitView = () => fitView({ padding: 0.15, duration: 300 });
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -447,13 +489,21 @@ export function FlowEngine() {
         {/* Graph */}
         <div className="relative min-w-0">
           <ReactFlow
-            nodes={graph.nodes}
-            edges={graph.edges}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeDragStop={(_, node) => {
+              setOverrides((o) => ({
+                ...o,
+                [viewKey]: { ...(o[viewKey] ?? {}), [node.id]: { x: node.position.x, y: node.position.y } },
+              }));
+            }}
             nodeTypes={nodeTypes}
             fitView
             fitViewOptions={{ padding: 0.15 }}
             proOptions={{ hideAttribution: true }}
-            nodesDraggable
+            nodesDraggable={!layoutLocked}
             nodesConnectable={false}
             elementsSelectable
             onNodeClick={(_, node) => {
@@ -479,13 +529,46 @@ export function FlowEngine() {
             />
           </ReactFlow>
 
-          <button
-            onClick={() => setPaused((p) => !p)}
-            className="absolute top-3 right-3 px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
-          >
-            {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-            {paused ? "Resume" : "Pause"} simulation
-          </button>
+          {/* Top-right control cluster */}
+          <div className="absolute top-3 right-3 flex items-center gap-2">
+            <button
+              onClick={handleFitView}
+              className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
+              title="Fit all nodes in view"
+            >
+              <Maximize2 className="w-3 h-3" /> Fit View
+            </button>
+            <button
+              onClick={handleResetLayout}
+              className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
+              title="Restore default layout for this view"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset Layout
+            </button>
+            <button
+              onClick={() => setLayoutLocked((l) => !l)}
+              className={cn(
+                "px-2.5 py-1 rounded-md panel border text-xs flex items-center gap-1.5",
+                layoutLocked ? "border-coral/60 text-coral" : "border-border hover:border-yellow/60",
+              )}
+              title={layoutLocked ? "Layout locked — click to unlock" : "Lock layout to prevent dragging"}
+            >
+              {layoutLocked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
+              {layoutLocked ? "Locked" : "Unlocked"}
+            </button>
+            <button
+              onClick={() => setPaused((p) => !p)}
+              className="px-2.5 py-1 rounded-md panel border border-border text-xs flex items-center gap-1.5 hover:border-yellow/60"
+            >
+              {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              {paused ? "Resume" : "Pause"} simulation
+            </button>
+          </div>
+
+          {/* Bottom-left layout hint */}
+          <div className="absolute bottom-3 left-3 text-[10px] text-mono text-muted-foreground bg-[var(--carapace-panel)]/80 border border-border rounded-md px-2 py-1 backdrop-blur-sm pointer-events-none">
+            Drag nodes to rearrange · Reset layout anytime
+          </div>
         </div>
       </div>
 
