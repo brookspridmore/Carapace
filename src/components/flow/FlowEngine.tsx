@@ -636,13 +636,45 @@ function FlowEngineInner() {
     [viewKey, densityMode, baseGraph.nodes, baseGraph.edges],
   );
 
+  // Group membership: nodes belonging to the same task become children of
+  // a compound parent in ELK. This makes each task render as a clean
+  // pipeline (Chief → Task → Subagent → fan-out) rather than a flat cluster.
+  // Agent / input / infra nodes stay at root because they're shared across tasks.
+  const groups = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    const tasksById = new Set(tasks.map((t) => t.id));
+    for (const n of baseGraph.nodes) {
+      const id = n.id;
+      // Skip shared / structural nodes.
+      if (id.startsWith("agent-") || id.startsWith("input-") || id.startsWith("infra-")) continue;
+      // Match common task-prefixed IDs produced by the graph builder.
+      // task-<id>, tool-<id>-..., out-<id>, appr-<id>, block-<id>,
+      // mem-<id>-..., snap-<id>, apprtool-<id>-...
+      let taskId: string | null = null;
+      const m = id.match(/^(?:task|tool|out|appr|block|mem|snap|apprtool)-([^-]+(?:-[^-]+)*?)(?:-|$)/);
+      if (m) {
+        // Greedy-ish: try progressively shorter prefixes until we hit a real task id.
+        const rest = id.replace(/^(task|tool|out|appr|block|mem|snap|apprtool)-/, "");
+        const parts = rest.split("-");
+        for (let k = parts.length; k >= 1; k--) {
+          const candidate = parts.slice(0, k).join("-");
+          if (tasksById.has(candidate)) { taskId = candidate; break; }
+        }
+        if (!taskId && m[1] && tasksById.has(m[1])) taskId = m[1];
+      }
+      if (taskId) map[id] = taskId;
+    }
+    return map;
+  }, [baseGraph.nodes, tasks]);
+
   useEffect(() => {
     let cancelled = false;
     setElkRunning(true);
     layoutWithElk(baseGraph.nodes, baseGraph.edges, {
       direction: "RIGHT",
-      nodeNodeSpacing: densityMode === "high" ? 80 : densityMode === "low" ? 48 : 60,
-      layerSpacing: densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+      nodeNodeSpacing: densityMode === "high" ? 110 : densityMode === "low" ? 70 : 90,
+      layerSpacing:    densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+      groups,
     })
       .then((res) => {
         if (cancelled) return;
@@ -679,8 +711,9 @@ function FlowEngineInner() {
     setElkRunning(true);
     layoutWithElk(baseGraph.nodes, baseGraph.edges, {
       direction: "RIGHT",
-      nodeNodeSpacing: densityMode === "high" ? 80 : densityMode === "low" ? 48 : 60,
-      layerSpacing: densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+      nodeNodeSpacing: densityMode === "high" ? 110 : densityMode === "low" ? 70 : 90,
+      layerSpacing:    densityMode === "high" ? 180 : densityMode === "low" ? 120 : 150,
+      groups,
     }).then((res) => {
       setElkNodes(res.nodes);
       setElkRunning(false);
