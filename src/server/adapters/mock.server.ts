@@ -9,10 +9,22 @@ import {
   type Task,
   type TaskStatus,
 } from "@/lib/mock-data";
-import type { OpenClawAdapter } from "./types";
+import type {
+  OpenClawAdapter,
+  AgentAliasInput,
+  ConfigBackupRef,
+  ConfigValidation,
+  ConfigWriteResult,
+  ConfigAgentRecord,
+} from "./types";
 
 const tasks: Task[] = TASKS.map((t) => ({ ...t }));
 const approvals = APPROVALS.map((a) => ({ ...a }));
+
+// In-memory mock storage for friendly-name aliases. The real adapter persists
+// these to Carapace's local SQLite DB (carapace.db).
+const aliasOverrides = new Map<string, AgentAliasInput>();
+const mockBackups: ConfigBackupRef[] = [];
 
 export const mockAdapter: OpenClawAdapter = {
   async health() {
@@ -53,5 +65,66 @@ export const mockAdapter: OpenClawAdapter = {
   },
   async recentLogs(limit = 60) {
     return LOGS.slice(0, limit);
+  },
+
+  async listAgentsFromConfig() {
+    // No real OpenClaw config in the preview environment — return mock-shaped
+    // records so the Agents page can demonstrate the read path.
+    const agents: ConfigAgentRecord[] = AGENTS.map((a) => ({
+      rawOpenClawId: a.id,
+      friendlyName: a.name,
+      role: a.role,
+      parentRawOpenClawId: a.parentId,
+      workspacePath: a.workspacePath,
+      memoryPath: `/var/openclaw/agents/${a.id}/MEMORY.md`,
+      model: a.model,
+      provider: a.provider,
+    }));
+    return { source: "mock", agents };
+  },
+
+  async updateAgentAlias(input: AgentAliasInput) {
+    aliasOverrides.set(input.rawOpenClawId, input);
+    return { ok: true };
+  },
+
+  async backupOpenClawConfig() {
+    const ref: ConfigBackupRef = {
+      path: `/var/lib/carapace/backups/openclaw-config.${new Date()
+        .toISOString()
+        .replace(/[:.]/g, "-")}.toml`,
+      createdAt: new Date().toISOString(),
+      size: 1024,
+    };
+    mockBackups.unshift(ref);
+    return ref;
+  },
+
+  async validateOpenClawConfig(payload: string) {
+    const result: ConfigValidation = { ok: true, errors: [], warnings: [] };
+    if (!payload.trim()) {
+      result.ok = false;
+      result.errors.push("Empty config payload");
+    }
+    if (!payload.includes("[agents")) {
+      result.warnings.push("No [agents.*] sections detected — is this the right file?");
+    }
+    return result;
+  },
+
+  async writeOpenClawConfig(payload: string, opts: { rawIds: string[]; operatorNote?: string }) {
+    const backup = await mockAdapter.backupOpenClawConfig();
+    const audit = {
+      id: `aud_${Date.now()}`,
+      ts: new Date().toISOString(),
+      summary: `Wrote ${opts.rawIds.length} agent alias${opts.rawIds.length === 1 ? "" : "es"} to OpenClaw config${opts.operatorNote ? ` — ${opts.operatorNote}` : ""}`,
+    };
+    const result: ConfigWriteResult = {
+      ok: true,
+      bytesWritten: payload.length,
+      backup,
+      audit,
+    };
+    return result;
   },
 };
