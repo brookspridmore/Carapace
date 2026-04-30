@@ -168,14 +168,27 @@ export function TaskNode({ data }: NodeProps) {
   const d = data as {
     title: string; status: string; priority: "high" | "medium" | "low";
     hasSnapshot?: boolean; hasConversation?: boolean; needsReview?: boolean;
+    blocked?: boolean; done?: boolean; focused?: boolean; agentName?: string;
   };
+  const borderTone =
+    d.focused ? "border-yellow ring-2 ring-yellow/40" :
+    d.blocked ? "border-coral/60" :
+    d.needsReview ? "border-coral/60" :
+    d.done ? "border-border opacity-60" :
+    "border-yellow/40";
+  const statusTone =
+    d.blocked ? "text-coral" :
+    d.needsReview ? "text-yellow" :
+    d.status === "running" ? "text-sky" :
+    "text-muted-foreground";
   return (
     <div className={cn(
-      "rounded-md panel border px-3 py-2 w-[200px]",
-      d.needsReview ? "border-coral/60" : "border-yellow/40",
+      "rounded-md panel border px-3 py-2 w-[210px] cursor-pointer transition-shadow hover:shadow-md",
+      borderTone,
     )}>
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
       <Handle type="source" position={Position.Right} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
+      <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
       <div className="flex items-center gap-1.5 mb-1">
         <ListTodo className="w-3 h-3 text-yellow" />
         <span className="text-[10px] text-mono uppercase tracking-wider text-muted-foreground">Task</span>
@@ -185,11 +198,15 @@ export function TaskNode({ data }: NodeProps) {
       </div>
       <div className="text-xs font-medium leading-snug line-clamp-2">{d.title}</div>
       <div className="flex items-center gap-2 mt-1.5">
-        <span className="text-[10px] text-mono text-muted-foreground">{d.status}</span>
+        <span className={cn("text-[10px] text-mono", statusTone)}>{d.status.replace("_", " ")}</span>
+        {d.agentName && (
+          <span className="text-[10px] text-mono text-muted-foreground truncate">· {d.agentName}</span>
+        )}
         <div className="ml-auto flex items-center gap-1">
           {d.hasSnapshot && <Camera className="w-3 h-3 text-sky" />}
           {d.hasConversation && <MessageSquare className="w-3 h-3 text-muted-foreground" />}
           {d.needsReview && <AlertTriangle className="w-3 h-3 text-coral" />}
+          {d.blocked && <ShieldAlert className="w-3 h-3 text-coral" />}
         </div>
       </div>
     </div>
