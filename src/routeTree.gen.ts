@@ -9,8 +9,74 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SnapshotsRouteImport } from './routes/snapshots'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ProvidersRouteImport } from './routes/providers'
+import { Route as MemoryRouteImport } from './routes/memory'
+import { Route as LogsRouteImport } from './routes/logs'
+import { Route as KanbanRouteImport } from './routes/kanban'
+import { Route as FilesRouteImport } from './routes/files'
+import { Route as DreamsRouteImport } from './routes/dreams'
+import { Route as ConversationsRouteImport } from './routes/conversations'
+import { Route as ApprovalsRouteImport } from './routes/approvals'
+import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SnapshotsRoute = SnapshotsRouteImport.update({
+  id: '/snapshots',
+  path: '/snapshots',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProvidersRoute = ProvidersRouteImport.update({
+  id: '/providers',
+  path: '/providers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MemoryRoute = MemoryRouteImport.update({
+  id: '/memory',
+  path: '/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogsRoute = LogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KanbanRoute = KanbanRouteImport.update({
+  id: '/kanban',
+  path: '/kanban',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FilesRoute = FilesRouteImport.update({
+  id: '/files',
+  path: '/files',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DreamsRoute = DreamsRouteImport.update({
+  id: '/dreams',
+  path: '/dreams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConversationsRoute = ConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApprovalsRoute = ApprovalsRouteImport.update({
+  id: '/approvals',
+  path: '/approvals',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentsRoute = AgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +85,186 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/approvals': typeof ApprovalsRoute
+  '/conversations': typeof ConversationsRoute
+  '/dreams': typeof DreamsRoute
+  '/files': typeof FilesRoute
+  '/kanban': typeof KanbanRoute
+  '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
+  '/providers': typeof ProvidersRoute
+  '/settings': typeof SettingsRoute
+  '/snapshots': typeof SnapshotsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/approvals': typeof ApprovalsRoute
+  '/conversations': typeof ConversationsRoute
+  '/dreams': typeof DreamsRoute
+  '/files': typeof FilesRoute
+  '/kanban': typeof KanbanRoute
+  '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
+  '/providers': typeof ProvidersRoute
+  '/settings': typeof SettingsRoute
+  '/snapshots': typeof SnapshotsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agents': typeof AgentsRoute
+  '/approvals': typeof ApprovalsRoute
+  '/conversations': typeof ConversationsRoute
+  '/dreams': typeof DreamsRoute
+  '/files': typeof FilesRoute
+  '/kanban': typeof KanbanRoute
+  '/logs': typeof LogsRoute
+  '/memory': typeof MemoryRoute
+  '/providers': typeof ProvidersRoute
+  '/settings': typeof SettingsRoute
+  '/snapshots': typeof SnapshotsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/agents'
+    | '/approvals'
+    | '/conversations'
+    | '/dreams'
+    | '/files'
+    | '/kanban'
+    | '/logs'
+    | '/memory'
+    | '/providers'
+    | '/settings'
+    | '/snapshots'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/agents'
+    | '/approvals'
+    | '/conversations'
+    | '/dreams'
+    | '/files'
+    | '/kanban'
+    | '/logs'
+    | '/memory'
+    | '/providers'
+    | '/settings'
+    | '/snapshots'
+  id:
+    | '__root__'
+    | '/'
+    | '/agents'
+    | '/approvals'
+    | '/conversations'
+    | '/dreams'
+    | '/files'
+    | '/kanban'
+    | '/logs'
+    | '/memory'
+    | '/providers'
+    | '/settings'
+    | '/snapshots'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentsRoute: typeof AgentsRoute
+  ApprovalsRoute: typeof ApprovalsRoute
+  ConversationsRoute: typeof ConversationsRoute
+  DreamsRoute: typeof DreamsRoute
+  FilesRoute: typeof FilesRoute
+  KanbanRoute: typeof KanbanRoute
+  LogsRoute: typeof LogsRoute
+  MemoryRoute: typeof MemoryRoute
+  ProvidersRoute: typeof ProvidersRoute
+  SettingsRoute: typeof SettingsRoute
+  SnapshotsRoute: typeof SnapshotsRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/snapshots': {
+      id: '/snapshots'
+      path: '/snapshots'
+      fullPath: '/snapshots'
+      preLoaderRoute: typeof SnapshotsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/providers': {
+      id: '/providers'
+      path: '/providers'
+      fullPath: '/providers'
+      preLoaderRoute: typeof ProvidersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/memory': {
+      id: '/memory'
+      path: '/memory'
+      fullPath: '/memory'
+      preLoaderRoute: typeof MemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logs': {
+      id: '/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/kanban': {
+      id: '/kanban'
+      path: '/kanban'
+      fullPath: '/kanban'
+      preLoaderRoute: typeof KanbanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/files': {
+      id: '/files'
+      path: '/files'
+      fullPath: '/files'
+      preLoaderRoute: typeof FilesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dreams': {
+      id: '/dreams'
+      path: '/dreams'
+      fullPath: '/dreams'
+      preLoaderRoute: typeof DreamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/conversations': {
+      id: '/conversations'
+      path: '/conversations'
+      fullPath: '/conversations'
+      preLoaderRoute: typeof ConversationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/approvals': {
+      id: '/approvals'
+      path: '/approvals'
+      fullPath: '/approvals'
+      preLoaderRoute: typeof ApprovalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,16 +277,18 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentsRoute: AgentsRoute,
+  ApprovalsRoute: ApprovalsRoute,
+  ConversationsRoute: ConversationsRoute,
+  DreamsRoute: DreamsRoute,
+  FilesRoute: FilesRoute,
+  KanbanRoute: KanbanRoute,
+  LogsRoute: LogsRoute,
+  MemoryRoute: MemoryRoute,
+  ProvidersRoute: ProvidersRoute,
+  SettingsRoute: SettingsRoute,
+  SnapshotsRoute: SnapshotsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

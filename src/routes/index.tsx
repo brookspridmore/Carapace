@@ -1,26 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AppShell } from "@/components/shell/AppShell";
+import { FlowEngine } from "@/components/flow/FlowEngine";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Flow — Carapace" },
+      { name: "description", content: "Carapace Flow engine — agent-centric runtime graph showing inputs, tools, memory, and infrastructure for the selected agent." },
+      { property: "og:title", content: "Flow — Carapace" },
+      { property: "og:description", content: "Agent-centric runtime graph for OpenClaw operators." },
+    ],
+  }),
+  component: FlowPage,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
+function FlowPage() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <AppShell title="Flow" subtitle="Chief of Staff · agent-centric runtime graph">
+      <FlowEngine />
+    </AppShell>
   );
-}
-
-function Index() {
-  return <PlaceholderIndex />;
 }
