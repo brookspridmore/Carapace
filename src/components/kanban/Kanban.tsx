@@ -223,8 +223,8 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
   );
 }
 
-function TaskDrawer({ task, onClose, onUpdate }: {
-  task: Task; onClose: () => void; onUpdate: (t: Task) => void;
+function TaskDrawer({ task, onClose, onUpdate, onOpenInFlow }: {
+  task: Task; onClose: () => void; onUpdate: (t: Task) => void; onOpenInFlow: (t: Task) => void;
 }) {
   const agent = AGENTS.find((a) => a.id === task.agentId);
   return (
@@ -238,9 +238,18 @@ function TaskDrawer({ task, onClose, onUpdate }: {
             </div>
             <h3 className="text-base font-semibold leading-tight">{task.title}</h3>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-surface text-muted-foreground">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              onClick={() => onOpenInFlow(task)}
+              className="px-2 py-1 rounded-md surface border border-border text-[11px] flex items-center gap-1.5 hover:border-yellow/60"
+              title="Focus this task in Flow"
+            >
+              <GitMerge className="w-3 h-3" /> Open in Flow
+            </button>
+            <button onClick={onClose} className="p-1 rounded-md hover:bg-surface text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-5">
@@ -256,6 +265,11 @@ function TaskDrawer({ task, onClose, onUpdate }: {
             >
               {AGENTS.map((a) => <option key={a.id} value={a.id}>{a.name} — {a.role}</option>)}
             </select>
+            {agent && (
+              <div className="mt-1.5 text-[10px] text-mono text-muted-foreground">
+                Currently assigned to <span className="text-yellow">{agent.name}</span> — reassignment is reflected live in Flow.
+              </div>
+            )}
           </Section>
 
           <Section title={`Subtasks (${task.subtasks.filter((s) => s.done).length}/${task.subtasks.length})`}>
