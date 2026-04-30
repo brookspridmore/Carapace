@@ -2,7 +2,8 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import {
   User, Send, Terminal, Globe, Clock, ArrowDownToLine,
   PlayCircle, Search, Brain, FileText, Volume2, Database,
-  HardDrive, Camera, Cpu,
+  HardDrive, Camera, Cpu, ListTodo, BookOpen, PenLine, Moon,
+  FileOutput, ShieldAlert, AlertTriangle, MessageSquare,
 } from "lucide-react";
 import { StatusPill } from "@/components/shell/StatusPill";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,23 @@ export function AgentNode({ data }: NodeProps) {
   const d = data as {
     name: string; role: string; model: string; provider: string;
     status: string; activeTask?: string; tokensUsed: number; tokensMax: number;
-    contextPressure: number;
+    contextPressure: number; compact?: boolean; dim?: boolean;
   };
+  if (d.compact) {
+    return (
+      <div className={cn("relative w-[180px] rounded-lg panel border px-3 py-2", d.dim ? "border-border opacity-70" : "border-yellow/50")}>
+        <Handle type="target" position={Position.Left} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
+        <Handle type="source" position={Position.Right} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
+        <Handle type="target" position={Position.Top} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
+        <Handle type="source" position={Position.Bottom} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs font-semibold truncate">{d.name}</div>
+          <StatusPill status={d.status} />
+        </div>
+        <div className="text-[10px] text-mono text-muted-foreground mt-0.5 truncate">{d.model}</div>
+      </div>
+    );
+  }
   const tokenPct = Math.min(100, Math.round((d.tokensUsed / d.tokensMax) * 100));
   return (
     <div className="relative w-[280px] rounded-xl panel border border-yellow/60 glow-yellow">
