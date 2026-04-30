@@ -38,10 +38,6 @@ const INPUT_DEFS: { kind: "human" | "telegram" | "terminal" | "api" | "cron"; la
   { kind: "cron", label: "Cron", rate: "next 14m" },
 ];
 
-const INFRA_DEFS: { kind: "openclaw"; label: string; meta?: string }[] = [
-  { kind: "openclaw", label: "OpenClaw runtime", meta: "127.0.0.1:18789" },
-];
-
 const toolStroke = (kind: ToolKind) =>
   kind === "exec" ? C.exec :
   kind === "memory" ? C.memory :
