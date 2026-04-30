@@ -233,35 +233,82 @@ const MEMORY_LABEL: Record<string, string> = {
 };
 
 export function MemoryNode({ data }: NodeProps) {
-  const d = data as { kind: keyof typeof MEMORY_ICONS; ref: string; note?: string };
+  const d = data as {
+    kind: keyof typeof MEMORY_ICONS; ref: string; note?: string;
+    // Snapshot-only extras
+    status?: "active" | "stale" | "completed";
+    importance?: number;
+    updatedAt?: string;
+    focused?: boolean;
+  };
   const Icon = MEMORY_ICONS[d.kind];
+  const isSnapshot = d.kind === "snapshot";
+  const tone =
+    d.focused ? "border-yellow ring-2 ring-yellow/40" :
+    isSnapshot && d.status === "active" ? "border-sky/60" :
+    isSnapshot && d.status === "stale" ? "border-border opacity-70" :
+    isSnapshot && d.status === "completed" ? "border-border opacity-50" :
+    MEMORY_BORDER[d.kind];
   return (
-    <div className={cn("rounded-lg surface border px-3 py-2 w-[180px]", MEMORY_BORDER[d.kind])}>
+    <div className={cn("rounded-lg surface border px-3 py-2 w-[200px] transition-shadow", tone, d.focused && "shadow-[0_0_0_3px_color-mix(in_oklab,var(--carapace-yellow)_30%,transparent)]")}>
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
       <Handle type="source" position={Position.Right} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
       <div className="flex items-center gap-2">
-        <Icon className="w-3.5 h-3.5" />
+        <Icon className={cn("w-3.5 h-3.5", isSnapshot && d.status === "active" ? "text-sky" : "")} />
         <span className="text-[10px] text-mono uppercase tracking-wider text-muted-foreground">{MEMORY_LABEL[d.kind]}</span>
+        {isSnapshot && d.status && (
+          <span className={cn(
+            "ml-auto text-[9px] text-mono px-1 rounded border",
+            d.status === "active" ? "border-sky/60 text-sky" :
+            d.status === "stale" ? "border-border text-muted-foreground" :
+            "border-border text-muted-foreground",
+          )}>{d.status}</span>
+        )}
       </div>
       <div className="text-xs text-foreground truncate mt-0.5">{d.ref}</div>
       {d.note && <div className="text-[10px] text-muted-foreground truncate">{d.note}</div>}
+      {isSnapshot && (typeof d.importance === "number" || d.updatedAt) && (
+        <div className="mt-1.5 flex items-center gap-2 text-[9px] text-mono text-muted-foreground">
+          {typeof d.importance === "number" && (
+            <span className="flex items-center gap-1">
+              <span className="w-10 h-1 rounded bg-border overflow-hidden">
+                <span className="block h-full bg-yellow" style={{ width: `${Math.round(d.importance * 100)}%` }} />
+              </span>
+              {Math.round(d.importance * 100)}%
+            </span>
+          )}
+          {d.updatedAt && <span className="ml-auto">upd {new Date(d.updatedAt).toISOString().slice(11, 16)}</span>}
+        </div>
+      )}
     </div>
   );
 }
 
 export function OutputNode({ data }: NodeProps) {
-  const d = data as { kind: "artifact" | "review"; label: string; meta?: string };
+  const d = data as { kind: "artifact" | "review" | "next_action"; label: string; meta?: string; emphasized?: boolean };
   const Icon = d.kind === "review" ? AlertTriangle : FileOutput;
+  const tone =
+    d.kind === "review" ? "border-coral/50" :
+    d.kind === "next_action" ? "border-yellow/70 bg-[color-mix(in_oklab,var(--carapace-yellow)_8%,transparent)]" :
+    "border-sky/40";
   return (
     <div className={cn(
-      "rounded-lg surface border px-3 py-2 w-[170px]",
-      d.kind === "review" ? "border-coral/50" : "border-sky/40",
+      "rounded-lg surface border px-3 py-2 w-[190px]",
+      tone,
+      d.emphasized && "ring-2 ring-yellow/50",
     )}>
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground !border-0 !w-2 !h-2" />
       <div className="flex items-center gap-2">
-        <Icon className={cn("w-3.5 h-3.5", d.kind === "review" ? "text-coral" : "text-sky")} />
-        <span className="text-xs font-medium">{d.label}</span>
+        {d.kind === "next_action" ? (
+          <span className="w-3.5 h-3.5 rounded-full bg-yellow/80 text-[9px] text-mono text-primary-foreground flex items-center justify-center font-bold">→</span>
+        ) : (
+          <Icon className={cn("w-3.5 h-3.5", d.kind === "review" ? "text-coral" : "text-sky")} />
+        )}
+        <span className="text-[10px] text-mono uppercase tracking-wider text-muted-foreground">
+          {d.kind === "next_action" ? "Next Action" : d.kind === "review" ? "Review" : "Output"}
+        </span>
       </div>
+      <div className="text-xs font-medium mt-0.5 leading-snug">{d.label}</div>
       {d.meta && <div className="text-[10px] text-mono text-muted-foreground mt-0.5 truncate">{d.meta}</div>}
     </div>
   );
