@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { layoutWithElk } from "./elk-layout";
 
 // ---------- color tokens ----------
 const C = {
