@@ -174,6 +174,11 @@ export const TASKS: Task[] = [
       "[12:04:18] chief: requested infra readiness from ops",
     ],
     createdAt: iso(-3),
+    toolsUsed: [
+      { kind: "memory", calls: 6 },
+      { kind: "file", calls: 2 },
+    ],
+    memoryRefs: ["MEMORY.md#launch-priors", "DREAMS.md#2026-04-22"],
   },
   {
     id: "t-002",
@@ -196,6 +201,11 @@ export const TASKS: Task[] = [
       "[12:01:44] researcher: parsing tier structures",
     ],
     createdAt: iso(-2),
+    toolsUsed: [
+      { kind: "web", calls: 12 },
+      { kind: "search", calls: 7 },
+    ],
+    memoryRefs: ["DREAMS.md#pricing-cluster"],
   },
   {
     id: "t-003",
@@ -216,6 +226,11 @@ export const TASKS: Task[] = [
     outputs: ["email-1.md", "email-2.md", "email-3.md", "email-4.md", "email-5.md"],
     logTail: ["[10:12:01] marketer: drafts complete, awaiting review"],
     createdAt: iso(-4),
+    toolsUsed: [
+      { kind: "file", calls: 5 },
+      { kind: "memory", calls: 3 },
+    ],
+    memoryRefs: ["MEMORY.md#brand-voice"],
   },
   {
     id: "t-004",
@@ -234,6 +249,11 @@ export const TASKS: Task[] = [
     outputs: ["src/server/webhooks/signer.ts"],
     logTail: ["[12:00:05] builder: tests scaffolded"],
     createdAt: iso(-1),
+    toolsUsed: [
+      { kind: "exec", calls: 4, risky: true },
+      { kind: "file", calls: 9 },
+    ],
+    memoryRefs: ["MEMORY.md#webhook-conventions"],
   },
   {
     id: "t-005",
@@ -250,6 +270,8 @@ export const TASKS: Task[] = [
     outputs: [],
     logTail: ["[09:20:00] ops: blocked — awaiting budget approval"],
     createdAt: iso(-5),
+    toolsUsed: [],
+    memoryRefs: [],
   },
   {
     id: "t-006",
@@ -279,6 +301,10 @@ export const TASKS: Task[] = [
     outputs: [],
     logTail: [],
     createdAt: iso(0),
+    toolsUsed: [
+      { kind: "file", calls: 1 },
+    ],
+    memoryRefs: [],
   },
   {
     id: "t-008",
