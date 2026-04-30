@@ -12,6 +12,7 @@ interface TaskStore {
   flowFilterMode: FlowFilterMode;
   showCompleted: boolean;
   densityMode: DensityMode;
+  autoLayout: boolean;
   // Actions
   setTasks: (tasks: Task[]) => void;
   updateTask: (task: Task) => void;
@@ -24,6 +25,7 @@ interface TaskStore {
   setFlowFilterMode: (m: FlowFilterMode) => void;
   setShowCompleted: (v: boolean) => void;
   setDensityMode: (m: DensityMode) => void;
+  setAutoLayout: (v: boolean) => void;
 }
 
 export const useTaskStore = create<TaskStore>((set) => ({
@@ -33,6 +35,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
   flowFilterMode: "all",
   showCompleted: false,
   densityMode: "medium",
+  autoLayout: true,
   setTasks: (tasks) => set({ tasks }),
   updateTask: (task) => set((s) => ({ tasks: s.tasks.map((t) => t.id === task.id ? task : t) })),
   patchTask: (id, patch) => set((s) => ({ tasks: s.tasks.map((t) => t.id === id ? { ...t, ...patch } : t) })),
@@ -44,6 +47,7 @@ export const useTaskStore = create<TaskStore>((set) => ({
   setFlowFilterMode: (m) => set({ flowFilterMode: m }),
   setShowCompleted: (v) => set({ showCompleted: v }),
   setDensityMode: (m) => set({ densityMode: m }),
+  setAutoLayout: (v) => set({ autoLayout: v }),
 }));
 
 // ---- Derived selectors ----
