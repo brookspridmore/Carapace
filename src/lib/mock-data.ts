@@ -355,12 +355,21 @@ export interface Snapshot {
   files: string[];
   memoryRefs: string[];
   createdAt: string;
+  // New: snapshot lifecycle + influence
+  taskId?: string;             // which task this snapshot belongs to
+  status?: "active" | "stale" | "completed";
+  importance?: number;         // 0..1 — drives node emphasis
+  updatedAt?: string;          // ISO of last write
 }
 
 export const SNAPSHOTS: Snapshot[] = [
   {
     id: "snap_q4_launch",
     agentId: "chief",
+    taskId: "t-001",
+    status: "active",
+    importance: 0.92,
+    updatedAt: iso(0),
     objective: "Successfully ship Q4 launch with coordinated comms and zero downtime.",
     currentState: "Marketing copy in review. Builder implementing webhook signer. Ops blocked on budget.",
     decisions: [
@@ -381,6 +390,10 @@ export const SNAPSHOTS: Snapshot[] = [
   {
     id: "snap_email_seq",
     agentId: "marketer",
+    taskId: "t-003",
+    status: "active",
+    importance: 0.78,
+    updatedAt: iso(0),
     objective: "Five-email launch sequence ready for operator review.",
     currentState: "All five drafts written, voice-checked against brand guide.",
     decisions: ["Open with story not feature", "Email 3 = customer quote"],
@@ -391,6 +404,10 @@ export const SNAPSHOTS: Snapshot[] = [
     createdAt: iso(0),
   },
 ];
+
+export function getSnapshotById(id: string): Snapshot | undefined {
+  return SNAPSHOTS.find((s) => s.id === id);
+}
 
 export interface ConversationMessage {
   id: string;
