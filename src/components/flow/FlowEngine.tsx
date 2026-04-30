@@ -7,12 +7,12 @@ import {
 import "@xyflow/react/dist/style.css";
 import { nodeTypes } from "./nodes";
 import {
-  AGENTS, type Agent, type AgentId, type Task, type ToolKind,
+  AGENTS, SNAPSHOTS, getSnapshotById, type Agent, type AgentId, type Task, type ToolKind, type Snapshot,
 } from "@/lib/mock-data";
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
-  RotateCcw, Maximize2, Lock, Unlock, Filter,
+  RotateCcw, Maximize2, Lock, Unlock, Filter, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -93,6 +93,8 @@ type BuildOpts = {
   filterToFocused: boolean;
   mode: "orchestration" | "focus";
   focusAgentId: AgentId; // only meaningful in focus mode
+  density: "low" | "medium" | "high";
+  focusedSnapshot: Snapshot | null;
 };
 
 function selectVisibleTasks(tasks: Task[], opts: BuildOpts): Task[] {
@@ -194,14 +196,20 @@ function buildTaskDrivenGraph(
 
       // For each task, render its execution path
       subTasks.forEach((task, ti) => {
+        // Anti-overlap: stagger task X slightly per index, and add larger Y gap as
+        // density increases (more side nodes per task = need more vertical room).
+        const lateralOffset = (ti % 2 === 0 ? -16 : 16);
+        const ySlot = taskRowY + ti * (taskRowStepY + (opts.density === "high" ? 60 : opts.density === "low" ? -40 : 0)) + stagger / 2;
         renderTaskPath({
           task,
           chiefId: chief.id,
           subAgentId: sub.id,
-          taskPos: { x: sx - 10, y: taskRowY + ti * taskRowStepY + stagger / 2 },
-          sidePos: { x: sx + 220, yStart: taskRowY + ti * taskRowStepY + stagger / 2 - 30 },
-          memoryPos: { x: sx + 220, yStart: taskRowY + ti * taskRowStepY + stagger / 2 + 90 },
+          taskPos: { x: sx - 10 + lateralOffset, y: ySlot },
+          sidePos: { x: sx + 240, yStart: ySlot - 30 },
+          memoryPos: { x: sx + 240, yStart: ySlot + 90 },
           focusedTaskId: opts.focusedTaskId,
+          density: opts.density,
+          focusedSnapshot: opts.focusedSnapshot,
           pushNode, edges,
         });
       });
@@ -236,15 +244,17 @@ function buildTaskDrivenGraph(
     // Tasks stack between chief and focused agent
     const taskColX = 320;
     visible.forEach((task, i) => {
-      const ty = 80 + i * 130;
+      const ty = 80 + i * (opts.density === "high" ? 200 : opts.density === "low" ? 110 : 150);
       renderTaskPath({
         task,
         chiefId: chief.id,
         subAgentId: agent.id,
         taskPos: { x: taskColX, y: ty },
-        sidePos: { x: cx + 280, yStart: ty - 20 },
-        memoryPos: { x: cx + 280, yStart: ty + 110 },
+        sidePos: { x: cx + 300, yStart: ty - 20 },
+        memoryPos: { x: cx + 300, yStart: ty + 110 },
         focusedTaskId: opts.focusedTaskId,
+        density: opts.density,
+        focusedSnapshot: opts.focusedSnapshot,
         pushNode, edges,
       });
     });
@@ -298,18 +308,27 @@ function renderTaskPath(args: {
   sidePos: { x: number; yStart: number };
   memoryPos: { x: number; yStart: number };
   focusedTaskId: string | null;
+  density: "low" | "medium" | "high";
+  focusedSnapshot: Snapshot | null;
   pushNode: (n: Node) => void;
   edges: Edge[];
 }) {
-  const { task, chiefId, subAgentId, taskPos, sidePos, memoryPos, focusedTaskId, pushNode, edges } = args;
+  const { task, chiefId, subAgentId, taskPos, sidePos, memoryPos, focusedTaskId, density, focusedSnapshot, pushNode, edges } = args;
   const taskId = `task-${task.id}`;
-  const focused = task.id === focusedTaskId;
+  const snapTaskFocus = focusedSnapshot?.taskId === task.id;
+  const focused = task.id === focusedTaskId || snapTaskFocus;
   const dim = task.status === "done" || task.status === "failed";
+
+  // Snapshot-related task gets a slight emphasis even if not the primary focus
+  const snapshotRelated = !!focusedSnapshot && (
+    focusedSnapshot.taskId === task.id ||
+    (task.snapshotId && task.snapshotId === focusedSnapshot.id)
+  );
 
   pushNode({
     id: taskId, type: "task",
     position: taskPos,
-    data: taskNodeData(task, focused),
+    data: { ...taskNodeData(task, focused), snapshotRelated } as unknown as Record<string, unknown>,
   });
 
   const es = taskEdgeStyle(task);
@@ -341,10 +360,16 @@ function renderTaskPath(args: {
   });
 
   // ---- Tools used by THIS task (subagent → tool) ----
-  // Tool nodes are namespaced per task so two tasks using the same tool
-  // don't share state, which would imply false coupling.
+  // Density:
+  //   low → no tool nodes (only delegation path)
+  //   medium → only risky tools (approval-gated)
+  //   high → all tools used
   let sideY = sidePos.yStart;
-  (task.toolsUsed ?? []).forEach((tool) => {
+  const toolsToRender =
+    density === "low" ? [] :
+    density === "medium" ? (task.toolsUsed ?? []).filter((t) => t.risky) :
+    (task.toolsUsed ?? []);
+  toolsToRender.forEach((tool) => {
     const toolId = `tool-${task.id}-${tool.kind}`;
     pushNode({
       id: toolId, type: "tool",
@@ -388,7 +413,8 @@ function renderTaskPath(args: {
   });
 
   // ---- Outputs produced by this task (task → output) ----
-  if (task.outputs.length > 0) {
+  // Hide outputs in low-density mode.
+  if (task.outputs.length > 0 && density !== "low") {
     const oid = `out-${task.id}`;
     pushNode({
       id: oid, type: "output",
@@ -439,8 +465,10 @@ function renderTaskPath(args: {
   }
 
   // ---- Memory refs used by this task (task → memory) ----
+  // Memory refs only render at high density.
   let memY = memoryPos.yStart;
-  (task.memoryRefs ?? []).forEach((ref, i) => {
+  const memRefsToRender = density === "high" ? (task.memoryRefs ?? []) : [];
+  memRefsToRender.forEach((ref, i) => {
     const mid = `mem-${task.id}-${i}`;
     const isSnapshotRef = ref.startsWith("snap_");
     pushNode({
@@ -461,19 +489,53 @@ function renderTaskPath(args: {
     memY += 70;
   });
 
-  // ---- Snapshot (task-level) ----
-  if (task.snapshotId) {
+  // ---- Snapshot (task-level) — always shown if linked, regardless of density.
+  // Snapshots are operator-relevant state, not raw execution detail.
+  if (task.snapshotId && density !== "low") {
+    const snap = SNAPSHOTS.find((s) => s.id === task.snapshotId);
     const sid = `snap-${task.id}`;
+    const snapFocused = !!focusedSnapshot && focusedSnapshot.id === task.snapshotId;
     pushNode({
       id: sid, type: "memory",
       position: { x: memoryPos.x + 200, y: memY },
-      data: { kind: "snapshot", ref: task.snapshotId, note: "linked snapshot" } as unknown as Record<string, unknown>,
+      data: {
+        kind: "snapshot", ref: task.snapshotId,
+        note: snap?.objective ? snap.objective.slice(0, 40) + (snap.objective.length > 40 ? "…" : "") : "linked snapshot",
+        status: snap?.status,
+        importance: snap?.importance,
+        updatedAt: snap?.updatedAt,
+        focused: snapFocused,
+      } as unknown as Record<string, unknown>,
     });
+    const snapStroke = snapFocused ? "var(--carapace-yellow)" : C.memory;
     edges.push({
       id: `e-${taskId}-${sid}`, source: taskId, target: sid,
-      style: { stroke: C.memory, strokeWidth: 1.2, strokeDasharray: "4 4" },
-      markerEnd: { type: MarkerType.ArrowClosed, color: C.memory },
+      animated: snapFocused,
+      style: { stroke: snapStroke, strokeWidth: snapFocused ? 2 : 1.2, strokeDasharray: snapFocused ? undefined : "4 4" },
+      markerEnd: { type: MarkerType.ArrowClosed, color: snapStroke },
     });
+    memY += 90;
+
+    // Render snapshot's next_actions as primary path when this snapshot is focused
+    if (snapFocused && snap) {
+      snap.nextActions.slice(0, 3).forEach((action, idx) => {
+        const naId = `na-${snap.id}-${idx}`;
+        pushNode({
+          id: naId, type: "output",
+          position: { x: memoryPos.x + 420, y: memY + idx * 70 - 30 },
+          data: { kind: "next_action", label: action, meta: `from ${snap.id}`, emphasized: true } as unknown as Record<string, unknown>,
+        });
+        edges.push({
+          id: `e-${sid}-${naId}`, source: sid, target: naId,
+          animated: true,
+          style: { stroke: "var(--carapace-yellow)", strokeWidth: 2 },
+          label: idx === 0 ? "next" : undefined,
+          labelStyle: { fill: "var(--carapace-yellow)", fontSize: 10, fontFamily: "JetBrains Mono" },
+          labelBgStyle: { fill: "var(--carapace-panel)" },
+          markerEnd: { type: MarkerType.ArrowClosed, color: "var(--carapace-yellow)" },
+        });
+      });
+    }
   }
 }
 
