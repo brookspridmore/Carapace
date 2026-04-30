@@ -10,6 +10,7 @@ import {
   AGENTS, SNAPSHOTS, getSnapshotById, type Agent, type AgentId, type Task, type ToolKind, type Snapshot,
 } from "@/lib/mock-data";
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
   RotateCcw, Maximize2, Lock, Unlock, Filter, Layers, Sparkles,
