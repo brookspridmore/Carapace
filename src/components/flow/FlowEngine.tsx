@@ -10,6 +10,7 @@ import {
   AGENTS, SNAPSHOTS, getSnapshotById, type Agent, type AgentId, type Task, type ToolKind, type Snapshot,
 } from "@/lib/mock-data";
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
   RotateCcw, Maximize2, Lock, Unlock, Filter, Layers, Sparkles,
@@ -54,13 +55,13 @@ function taskEdgeStyle(t: Task) {
   return { stroke: C.delegation, dashed: false, animated: true, label: "delegated" };
 }
 
-function taskNodeData(t: Task, focused: boolean) {
+function taskNodeData(t: Task, focused: boolean, agentName?: string) {
   return {
     id: t.id,
     title: t.title,
     status: t.status,
     priority: t.priority,
-    agentName: AGENTS.find((a) => a.id === t.agentId)?.name,
+    agentName: agentName ?? AGENTS.find((a) => a.id === t.agentId)?.name,
     hasSnapshot: !!t.snapshotId,
     hasConversation: !!t.conversationId,
     needsReview: t.status === "needs_review",
@@ -727,6 +728,7 @@ function FlowEngineInner() {
   const handleFitView = () => fitView({ padding: 0.15, duration: 300 });
 
   const activeTaskCount = tasks.filter(isActiveTask).length;
+  const labelMap = useAgentLabelMap();
 
   return (
     <div className="flex flex-col h-[calc(100vh-3.5rem)]">
@@ -825,7 +827,7 @@ function FlowEngineInner() {
                   a.status === "error" ? "bg-coral" : "bg-muted-foreground",
                 )}/>
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium truncate">{a.name}</div>
+                  <div className="text-xs font-medium truncate">{labelMap[a.id] ?? a.name}</div>
                   <div className="text-[10px] text-muted-foreground truncate text-mono">{a.model}</div>
                 </div>
                 {taskCount > 0 && (

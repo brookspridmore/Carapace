@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SNAPSHOTS, AGENTS } from "@/lib/mock-data";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 import { format } from "date-fns";
 import { Camera, FileText, Brain, Play, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/snapshots")({
 function SnapshotsPage() {
   const navigate = useNavigate();
   const setFocusedSnapshot = useTaskStore((s) => s.setFocusedSnapshot);
+  const labelMap = useAgentLabelMap();
 
   function resume(snapshotId: string) {
     setFocusedSnapshot(snapshotId);
@@ -37,7 +39,7 @@ function SnapshotsPage() {
       />
       <div className="p-6 space-y-4">
         {SNAPSHOTS.map((s) => {
-          const agent = AGENTS.find((a) => a.id === s.agentId);
+          const agentName = labelMap[s.agentId] ?? AGENTS.find((a) => a.id === s.agentId)?.name ?? s.agentId;
           const status = s.status ?? "active";
           const importance = s.importance ?? 0.5;
           const tone =
@@ -51,7 +53,7 @@ function SnapshotsPage() {
                   <Camera className={cn("w-4 h-4", status === "active" ? "text-sky" : "text-muted-foreground")} />
                   <span className="text-mono text-xs">{s.id}</span>
                   <span className="text-xs text-muted-foreground">·</span>
-                  <span className="text-xs">{agent?.name}</span>
+                  <span className="text-xs">{agentName}</span>
                   <span className={cn("ml-2 text-[10px] text-mono px-1.5 py-0.5 rounded border",
                     status === "active" ? "border-sky/60 text-sky" :
                     status === "stale" ? "border-border text-muted-foreground" :

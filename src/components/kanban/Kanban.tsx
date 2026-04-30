@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useTaskStore } from "@/lib/task-store";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useAgentLabelMap } from "@/lib/agent-registry";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "bg-coral",
@@ -21,6 +22,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 
 export function Kanban() {
   const tasks = useTaskStore((s) => s.tasks);
+  const labelMap = useAgentLabelMap();
   const updateTask = useTaskStore((s) => s.updateTask);
   const moveTask = useTaskStore((s) => s.moveTask);
   const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
@@ -87,7 +89,7 @@ export function Kanban() {
           className="surface border border-border rounded-md px-2 py-1 text-xs"
         >
           <option value="all">All agents</option>
-          {AGENTS.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {AGENTS.map((a) => <option key={a.id} value={a.id}>{labelMap[a.id] ?? a.name}</option>)}
         </select>
         <select
           value={filterPriority}
@@ -183,6 +185,8 @@ function DraggableCard({ task, onSelect, highlighted }: { task: Task; onSelect: 
 
 function Card({ task, dragging = false, highlighted = false }: { task: Task; dragging?: boolean; highlighted?: boolean }) {
   const agent = AGENTS.find((a) => a.id === task.agentId);
+  const labelMap = useAgentLabelMap();
+  const agentName = labelMap[task.agentId] ?? agent?.name ?? task.agentId;
   const subDone = task.subtasks.filter((s) => s.done).length;
   return (
     <div
@@ -199,9 +203,9 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
       <div className="mt-2 flex items-center justify-between text-[10px] text-mono text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <div className="w-4 h-4 rounded-full bg-yellow/20 text-yellow flex items-center justify-center text-[9px] font-semibold uppercase">
-            {agent?.name.slice(0, 1)}
+            {agentName.slice(0, 1)}
           </div>
-          <span>{agent?.name}</span>
+          <span>{agentName}</span>
         </div>
         {task.dueDate && (
           <span>{format(new Date(task.dueDate), "MMM d")}</span>

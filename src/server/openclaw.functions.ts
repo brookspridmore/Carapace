@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAdapter, getOpenClawBaseUrl } from "./openclaw.server";
 import type { TaskStatus } from "@/lib/mock-data";
+import type { AgentAliasInput } from "./adapters/types";
 
 export const ocHealth = createServerFn({ method: "GET" }).handler(async () => {
   const adapter = getAdapter();
@@ -48,3 +49,31 @@ export const ocListProviders = createServerFn({ method: "GET" }).handler(async (
 export const ocRecentLogs = createServerFn({ method: "GET" }).handler(async () => {
   return getAdapter().recentLogs(80);
 });
+
+// ---- Agent registry / OpenClaw config bridge --------------------------------
+
+export const ocListAgentsFromConfig = createServerFn({ method: "GET" }).handler(async () => {
+  return getAdapter().listAgentsFromConfig();
+});
+
+export const ocUpdateAgentAlias = createServerFn({ method: "POST" })
+  .inputValidator((data: AgentAliasInput) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().updateAgentAlias(data);
+  });
+
+export const ocBackupOpenClawConfig = createServerFn({ method: "POST" }).handler(async () => {
+  return getAdapter().backupOpenClawConfig();
+});
+
+export const ocValidateOpenClawConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: { payload: string }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().validateOpenClawConfig(data.payload);
+  });
+
+export const ocWriteOpenClawConfig = createServerFn({ method: "POST" })
+  .inputValidator((data: { payload: string; rawIds: string[]; operatorNote?: string }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().writeOpenClawConfig(data.payload, { rawIds: data.rawIds, operatorNote: data.operatorNote });
+  });
