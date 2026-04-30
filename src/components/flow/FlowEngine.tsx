@@ -545,6 +545,8 @@ function FlowEngineInner() {
   const setFlowFilterMode = useTaskStore((s) => s.setFlowFilterMode);
   const showCompleted = useTaskStore((s) => s.showCompleted);
   const setShowCompleted = useTaskStore((s) => s.setShowCompleted);
+  const autoLayout = useTaskStore((s) => s.autoLayout);
+  const setAutoLayout = useTaskStore((s) => s.setAutoLayout);
 
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { task?: string; snapshot?: string };
@@ -621,13 +623,15 @@ function FlowEngineInner() {
   );
 
   const decoratedNodes = useMemo<Node[]>(() => {
-    const ov = overrides[viewKey] ?? {};
+    // Auto Layout ON → ignore manual overrides, always use deterministic layout.
+    // Auto Layout OFF → respect user-dragged positions for this view.
+    const ov = autoLayout ? {} : (overrides[viewKey] ?? {});
     return baseGraph.nodes.map((n) => ({
       ...n,
       draggable: !layoutLocked,
       position: ov[n.id] ?? n.position,
     }));
-  }, [baseGraph.nodes, overrides, viewKey, layoutLocked]);
+  }, [baseGraph.nodes, overrides, viewKey, layoutLocked, autoLayout]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(decoratedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(baseGraph.edges);
