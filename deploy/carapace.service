@@ -1,0 +1,23 @@
+[Unit]
+Description=Carapace — Operator Dashboard for OpenClaw
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/carapace
+EnvironmentFile=/opt/carapace/.env
+# Carapace MUST bind to localhost only — Tailscale Serve fronts external access.
+ExecStart=/usr/local/bin/bun run start
+Restart=on-failure
+RestartSec=3
+User=carapace
+Group=carapace
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/carapace /var/log/carapace
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
