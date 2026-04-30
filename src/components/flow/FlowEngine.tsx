@@ -762,6 +762,8 @@ function FlowEngineInner() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeDragStop={(_, node) => {
+              // Manual drag implies the operator wants to override layout.
+              if (autoLayout) setAutoLayout(false);
               setOverrides((o) => ({
                 ...o,
                 [viewKey]: { ...(o[viewKey] ?? {}), [node.id]: { x: node.position.x, y: node.position.y } },
