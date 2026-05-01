@@ -19,6 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { layoutWithElk } from "./elk-layout";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 
 // ---------- color tokens ----------
 const C = {
@@ -918,6 +919,17 @@ function FlowEngineInner() {
           </ReactFlow>
 
           <div className="absolute top-3 right-3 flex items-center gap-2">
+            <OnboardingHint
+              id="flow.intro"
+              title="Flow is your live runtime graph"
+              docsHref="/docs"
+              side="bottom"
+              align="end"
+            >
+              <p>Pick an agent in the left rail, then read the graph: inputs on the left, tools and memory in the middle, outputs and approvals on the right.</p>
+              <p>Use the priority filter to declutter. Drag nodes to rearrange — turn <strong>Auto Layout OFF</strong> to keep your manual positions.</p>
+              <p>Memory and snapshot nodes are clickable — they jump straight to the relevant page.</p>
+            </OnboardingHint>
             <button
               onClick={() => setAutoLayout(!autoLayout)}
               className={cn("px-2.5 py-1 rounded-md panel border text-xs flex items-center gap-1.5",
