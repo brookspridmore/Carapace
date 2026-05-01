@@ -883,6 +883,14 @@ function FlowEngineInner() {
                 if (AGENTS.some((a) => a.id === id)) setSelectedId(id);
                 return;
               }
+              if (node.type === "memory") {
+                const data = node.data as { kind?: string; ref?: string };
+                if (data.kind === "snapshot" && data.ref) {
+                  setFocusedSnapshot(data.ref);
+                  navigate({ to: "/snapshots" });
+                  return;
+                }
+              }
               if (node.type === "task") {
                 const data = node.data as { id?: string };
                 const taskId = data.id;
