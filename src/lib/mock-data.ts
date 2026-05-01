@@ -357,9 +357,17 @@ export interface Snapshot {
   createdAt: string;
   // New: snapshot lifecycle + influence
   taskId?: string;             // which task this snapshot belongs to
-  status?: "active" | "stale" | "completed";
+  status?: "active" | "stale" | "completed" | "archived";
   importance?: number;         // 0..1 — drives node emphasis
   updatedAt?: string;          // ISO of last write
+  // ---- Carapace v1.1 structured snapshot fields ----
+  title?: string;
+  conversationId?: string;
+  openQuestions?: string[];
+  conversationRefs?: string[];
+  artifacts?: string[];
+  retrievalKeywords?: string[];
+  confidenceScore?: number;    // 0..1
 }
 
 export const SNAPSHOTS: Snapshot[] = [
