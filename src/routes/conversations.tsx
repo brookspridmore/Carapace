@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { CONVERSATIONS, AGENTS, type ConversationThread } from "@/lib/mock-data";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { Send, Terminal, Globe, MonitorSmartphone } from "lucide-react";
@@ -34,6 +35,12 @@ function ConversationsPage() {
         eyebrow="Module"
         title="Unified conversations"
         description="Conversations from Telegram, the Carapace UI, terminals, and the OpenClaw API are merged into coherent timelines per agent."
+        hint={
+          <OnboardingHint id="conversations.intro" title="One thread per agent" docsHref="/docs">
+            <p>Talking to your Chief on Telegram and in the UI? Carapace merges both into one timeline so you don't lose context.</p>
+            <p>From any thread you can spin out a Kanban task or attach a snapshot.</p>
+          </OnboardingHint>
+        }
       />
       <div className="grid grid-cols-[320px_1fr] h-[calc(100vh-3.5rem-104px)]">
         <aside className="panel border-r border-border overflow-y-auto">

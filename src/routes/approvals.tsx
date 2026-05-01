@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { APPROVALS, AGENTS, type ApprovalRequest } from "@/lib/mock-data";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { Check, X, Terminal, FileText, Settings, Brain } from "lucide-react";
@@ -33,6 +34,16 @@ function ApprovalsPage() {
         eyebrow="System"
         title="Approval queue"
         description="Carapace blocks risky agent actions until you approve. Every decision is logged in the audit trail."
+        hint={
+          <OnboardingHint
+            id="approvals.intro"
+            title="You are the gate"
+            docsHref="/docs"
+          >
+            <p>Anything destructive, expensive, or external (file writes, external API calls, OpenClaw config writes, memory writes) lands here first.</p>
+            <p>Carapace never auto-approves. The badge in the top bar shows how many are waiting.</p>
+          </OnboardingHint>
+        }
       />
       <div className="p-6 space-y-3 max-w-3xl">
         {items.map((a) => {

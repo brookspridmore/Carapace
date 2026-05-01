@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { FILE_TREE, type FileNode } from "@/lib/mock-data";
 import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen, Save, History } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,11 @@ function FilesPage() {
         eyebrow="Module"
         title="File browser"
         description="Edit OpenClaw configuration and agent .md files. Every save creates a backup; risky edits require approval."
+        hint={
+          <OnboardingHint id="files.intro" title="Safe-by-default editor" docsHref="/docs">
+            <p>Browse the OpenClaw codebase and per-agent files (workspaces, MEMORY.md, DREAMS.md). Every save creates a backup automatically.</p>
+          </OnboardingHint>
+        }
         actions={
           <>
             <button className="text-xs px-2.5 py-1 rounded-md surface border border-border flex items-center gap-1.5 hover:border-yellow/60">

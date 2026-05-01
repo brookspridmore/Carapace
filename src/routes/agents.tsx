@@ -7,6 +7,7 @@ import { AGENTS } from "@/lib/mock-data";
 import { useAgentRegistry } from "@/lib/agent-registry";
 import { Cpu, FolderOpen, Brain, Pencil, Hash } from "lucide-react";
 import { EditAgentDrawer, AgentSourcePill } from "@/components/agents/EditAgentDrawer";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 
 export const Route = createFileRoute("/agents")({
   head: () => ({
@@ -30,6 +31,16 @@ function AgentsPage() {
         eyebrow="Module"
         title="Agent registry"
         description="Friendly names overlay OpenClaw's raw IDs without losing them. Edit any agent to update the alias locally — push to OpenClaw config when you're ready."
+        hint={
+          <OnboardingHint
+            id="agents.registry"
+            title="Name your Chief and subagents first"
+            docsHref="/docs"
+          >
+            <p>OpenClaw uses raw IDs like <code className="text-mono">agt_a8f3</code>. Carapace overlays a friendly name on top — raw IDs never change.</p>
+            <p>Click <strong>Edit</strong> on any card to rename, set a parent, or attach a workspace. Edits stay local until you push them to the OpenClaw config.</p>
+          </OnboardingHint>
+        }
       />
       <div className="p-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {aliases.map((a) => {

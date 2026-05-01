@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { DREAM_RUN } from "@/lib/mock-data";
 import { Sparkles, Check, X, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,11 @@ function DreamsPage() {
         eyebrow="Module"
         title="Dreaming engine"
         description="Carapace observes how OpenClaw consolidates memory: each phase is logged, and every promotion or removal can be approved or rejected before it lands."
+        hint={
+          <OnboardingHint id="dreams.intro" title="Memory consolidation, observable" docsHref="/docs">
+            <p>Dreams promotes important short-term memory into MEMORY.md and removes noise. Run it weekly and skim the diff — promotions feed straight into the Memory module.</p>
+          </OnboardingHint>
+        }
         actions={
           <>
             <button

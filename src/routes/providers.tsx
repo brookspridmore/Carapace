@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { StatusPill } from "@/components/shell/StatusPill";
 import { PROVIDERS } from "@/lib/mock-data";
 import { Plug, Zap } from "lucide-react";
@@ -25,6 +26,11 @@ function ProvidersPage() {
         eyebrow="Module"
         title="LLM providers"
         description="Carapace routes every model call through a primary + fallback chain. Edit ordering, run a test connection, and write changes back to OpenClaw config."
+        hint={
+          <OnboardingHint id="providers.intro" title="Primary + fallback chain" docsHref="/docs">
+            <p>Set one primary provider and an ordered fallback chain. If the primary fails, OpenClaw walks the chain automatically and the failure shows up in Logs.</p>
+          </OnboardingHint>
+        }
         actions={
           <button className="text-xs px-2.5 py-1 rounded-md bg-yellow text-primary-foreground flex items-center gap-1.5 hover:opacity-90">
             <Plug className="w-3.5 h-3.5" /> Add provider
