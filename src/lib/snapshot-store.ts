@@ -109,8 +109,10 @@ export function useSnapshotById(id?: string | null): Snapshot | undefined {
 }
 
 export function useSnapshotsForTask(taskId?: string | null): Snapshot[] {
-  return useSnapshotStore((s) =>
-    taskId ? s.snapshots.filter((x) => x.taskId === taskId) : [],
+  const snapshots = useSnapshotStore((s) => s.snapshots);
+  return useMemo(
+    () => (taskId ? snapshots.filter((x) => x.taskId === taskId) : []),
+    [snapshots, taskId],
   );
 }
 
