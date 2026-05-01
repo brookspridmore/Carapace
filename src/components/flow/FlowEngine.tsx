@@ -584,10 +584,12 @@ function FlowEngineInner() {
   }, [search?.task, tasks, setFocusedTask, fitView]);
 
   // Snapshot deep-link / Resume from Snapshot
+  const snapshotsAll = useSnapshotStore((s) => s.snapshots);
+  const getSnap = (id: string) => snapshotsAll.find((s) => s.id === id);
   useEffect(() => {
     const sid = search?.snapshot;
     if (!sid) return;
-    const snap = getSnapshotById(sid);
+    const snap = getSnap(sid);
     if (!snap) return;
     setFocusedSnapshot(sid);
     if (snap.taskId) {
@@ -600,7 +602,8 @@ function FlowEngineInner() {
     // Snapshot resume implies high detail so next_actions read clearly
     setDensityMode("high");
     setTimeout(() => fitView({ padding: 0.2, duration: 500 }), 100);
-  }, [search?.snapshot, tasks, setFocusedSnapshot, setFocusedTask, setDensityMode, fitView]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search?.snapshot]);
   const chief = AGENTS.find((a) => a.id === "chief")!;
   const selected = AGENTS.find((a) => a.id === selectedId)!;
   const isOrchestration = selectedId === "chief";
@@ -613,7 +616,16 @@ function FlowEngineInner() {
   }), [selected, tick, paused]);
 
   const filterToFocused = flowFilterMode === "selected" && !!focusedTaskId;
-  const focusedSnapshot = focusedSnapshotId ? getSnapshotById(focusedSnapshotId) ?? null : null;
+  const focusedSnapshot = focusedSnapshotId ? snapshotsAll.find((s) => s.id === focusedSnapshotId) ?? null : null;
+  const snapshotsByTaskId = useMemo(() => {
+    const map: Record<string, Snapshot> = {};
+    // Newest snapshot per task wins, in case there are several.
+    const sorted = [...snapshotsAll].sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt));
+    for (const s of sorted) {
+      if (s.taskId && !map[s.taskId] && s.status !== "archived") map[s.taskId] = s;
+    }
+    return map;
+  }, [snapshotsAll]);
 
   const baseGraph = useMemo(
     () => buildTaskDrivenGraph(chief, tasks, {
@@ -624,8 +636,9 @@ function FlowEngineInner() {
       filterToFocused,
       density: densityMode,
       focusedSnapshot,
+      snapshotsByTaskId,
     }),
-    [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused, densityMode, focusedSnapshot],
+    [chief, tasks, isOrchestration, liveAgent.id, showCompleted, focusedTaskId, filterToFocused, densityMode, focusedSnapshot, snapshotsByTaskId],
   );
 
   // ----- ELK layout -----
