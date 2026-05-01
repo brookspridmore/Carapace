@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMemoryStore, getSourceById, type MemorySearchHit, type WriteLayer } from "@/lib/memory-store";
 import { useAgentLabelMap } from "@/lib/agent-registry";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 
 const ENTRY_TABS = ["all", "MEMORY.md", "DREAMS.md", "daily", "snapshot"] as const;
 const TOP_TABS = ["search", "browse", "traces", "queue"] as const;
@@ -42,6 +43,13 @@ function MemoryPage() {
         eyebrow="Module"
         title="Memory command center"
         description="Memory is retrieved, ranked, traced, and controlled — not dumped blindly into agent context. Search across snapshots, agent files, MEMORY.md, DREAMS.md, task notes, and conversation summaries; review every retrieval; approve or reject proposed writes."
+        hint={
+          <OnboardingHint id="memory.intro" title="Four tabs, one principle: control" docsHref="/docs">
+            <p><strong>Search</strong> ranks memory across all sources. <strong>Browse</strong> shows raw entries.</p>
+            <p><strong>Retrieval traces</strong> is your audit trail — what an agent queried, what it kept, what it rejected.</p>
+            <p><strong>Write queue</strong> is where proposed memory writes wait for your approval. Edit before approving if needed.</p>
+          </OnboardingHint>
+        }
       />
       <div className="p-6 space-y-4">
         <div className="flex gap-1.5 border-b border-border">

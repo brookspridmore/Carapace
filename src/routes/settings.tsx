@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { Copy } from "lucide-react";
 import { useAgentRegistry } from "@/lib/agent-registry";
 
@@ -23,7 +24,17 @@ function SettingsPage() {
   const setAgentsPath = useAgentRegistry((s) => s.setOpenClawAgentsPath);
   return (
     <AppShell title="Settings" subtitle="Operator preferences · OpenClaw connection">
-      <PageHeader eyebrow="System" title="Settings" description="Configure how Carapace talks to OpenClaw and how it's exposed on your network." />
+      <PageHeader
+        eyebrow="System"
+        title="Settings"
+        description="Configure how Carapace talks to OpenClaw and how it's exposed on your network."
+        hint={
+          <OnboardingHint id="settings.intro" title="Localhost + Tailscale only" docsHref="/docs">
+            <p>Carapace must bind to localhost. Expose it through Tailscale Serve — never the public internet.</p>
+            <p>Set the OpenClaw base URL and config paths here so the agent registry can read and write the real config.</p>
+          </OnboardingHint>
+        }
+      />
       <div className="p-6 space-y-6 max-w-2xl">
         <Card title="OpenClaw connection">
           <Field label="OPENCLAW_BASE_URL" defaultValue="http://127.0.0.1:18789" />

@@ -15,6 +15,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { useSnapshotStore, useSnapshotsForTask } from "@/lib/snapshot-store";
 import { useMemoryStore } from "@/lib/memory-store";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "bg-coral",
@@ -113,6 +114,16 @@ export function Kanban() {
           >
             <Plus className="w-3.5 h-3.5" /> Task
           </button>
+          <OnboardingHint
+            id="kanban.create"
+            title="Create structured work, not chat"
+            docsHref="/docs"
+            side="bottom"
+            align="end"
+          >
+            <p>Click <strong>+ Task</strong> to define work for an agent. Title is required; assigning a subagent is strongly recommended.</p>
+            <p>Tasks flow into Flow as nodes the moment they're active, and you can attach a snapshot to make them resumable.</p>
+          </OnboardingHint>
         </div>
       </div>
 

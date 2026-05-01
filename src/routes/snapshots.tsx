@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { AGENTS, type Snapshot, type AgentId } from "@/lib/mock-data";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { format } from "date-fns";
@@ -65,6 +66,16 @@ function SnapshotsPage() {
         eyebrow="Module"
         title="Snapshots"
         description="Snapshots are compressed operational state — not transcripts. Each one captures objective, decisions, open questions, next actions, blockers, and refs so an agent can resume cleanly without reprocessing history."
+        hint={
+          <OnboardingHint
+            id="snapshots.intro"
+            title="Snapshots make work resumable"
+            docsHref="/docs"
+          >
+            <p>Use a snapshot when an agent stops mid-task. It saves objective, decisions made, next actions and blockers — no transcript.</p>
+            <p>You can create one from a Kanban card or from this page. Snapshots show up as clickable nodes in Flow and become searchable from Memory.</p>
+          </OnboardingHint>
+        }
       />
       <div className="p-6 space-y-4">
         {/* Filter bar */}

@@ -17,6 +17,7 @@ import { Route as LogsRouteImport } from './routes/logs'
 import { Route as KanbanRouteImport } from './routes/kanban'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as DreamsRouteImport } from './routes/dreams'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as ConversationsRouteImport } from './routes/conversations'
 import { Route as ApprovalsRouteImport } from './routes/approvals'
 import { Route as AgentsRouteImport } from './routes/agents'
@@ -62,6 +63,11 @@ const DreamsRoute = DreamsRouteImport.update({
   path: '/dreams',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConversationsRoute = ConversationsRouteImport.update({
   id: '/conversations',
   path: '/conversations',
@@ -88,6 +94,7 @@ export interface FileRoutesByFullPath {
   '/agents': typeof AgentsRoute
   '/approvals': typeof ApprovalsRoute
   '/conversations': typeof ConversationsRoute
+  '/docs': typeof DocsRoute
   '/dreams': typeof DreamsRoute
   '/files': typeof FilesRoute
   '/kanban': typeof KanbanRoute
@@ -102,6 +109,7 @@ export interface FileRoutesByTo {
   '/agents': typeof AgentsRoute
   '/approvals': typeof ApprovalsRoute
   '/conversations': typeof ConversationsRoute
+  '/docs': typeof DocsRoute
   '/dreams': typeof DreamsRoute
   '/files': typeof FilesRoute
   '/kanban': typeof KanbanRoute
@@ -117,6 +125,7 @@ export interface FileRoutesById {
   '/agents': typeof AgentsRoute
   '/approvals': typeof ApprovalsRoute
   '/conversations': typeof ConversationsRoute
+  '/docs': typeof DocsRoute
   '/dreams': typeof DreamsRoute
   '/files': typeof FilesRoute
   '/kanban': typeof KanbanRoute
@@ -133,6 +142,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/approvals'
     | '/conversations'
+    | '/docs'
     | '/dreams'
     | '/files'
     | '/kanban'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/approvals'
     | '/conversations'
+    | '/docs'
     | '/dreams'
     | '/files'
     | '/kanban'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/agents'
     | '/approvals'
     | '/conversations'
+    | '/docs'
     | '/dreams'
     | '/files'
     | '/kanban'
@@ -176,6 +188,7 @@ export interface RootRouteChildren {
   AgentsRoute: typeof AgentsRoute
   ApprovalsRoute: typeof ApprovalsRoute
   ConversationsRoute: typeof ConversationsRoute
+  DocsRoute: typeof DocsRoute
   DreamsRoute: typeof DreamsRoute
   FilesRoute: typeof FilesRoute
   KanbanRoute: typeof KanbanRoute
@@ -244,6 +257,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DreamsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/conversations': {
       id: '/conversations'
       path: '/conversations'
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   AgentsRoute: AgentsRoute,
   ApprovalsRoute: ApprovalsRoute,
   ConversationsRoute: ConversationsRoute,
+  DocsRoute: DocsRoute,
   DreamsRoute: DreamsRoute,
   FilesRoute: FilesRoute,
   KanbanRoute: KanbanRoute,

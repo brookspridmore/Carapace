@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { LOGS, AGENTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useAgentLabelMap } from "@/lib/agent-registry";
@@ -31,6 +32,11 @@ function LogsPage() {
         eyebrow="System"
         title="Logs"
         description="Last 80 events across all agents. On the VPS this is a virtualized live stream from OpenClaw + Carapace's own audit log."
+        hint={
+          <OnboardingHint id="logs.intro" title="Append-only audit" docsHref="/docs">
+            <p>Every state-changing action emits a log entry: alias edits, config writes, task moves, approvals, snapshot creations, memory writes. Filter by agent or level to narrow down.</p>
+          </OnboardingHint>
+        }
       />
       <div className="p-6 space-y-4">
         <div className="flex items-center gap-2">

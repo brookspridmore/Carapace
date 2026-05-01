@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity, KanbanSquare, Users, FolderTree, MessagesSquare, Sparkles,
   Brain, Camera, Plug, ShieldCheck, ScrollText, Settings, Search,
-  PanelLeftClose, PanelLeftOpen, Hexagon,
+  PanelLeftClose, PanelLeftOpen, Hexagon, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ const NAV: { to: string; label: string; icon: typeof Activity; group: "primary" 
   { to: "/providers", label: "Providers", icon: Plug, group: "modules" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, group: "system" },
   { to: "/logs", label: "Logs", icon: ScrollText, group: "system" },
+  { to: "/docs", label: "Docs", icon: BookOpen, group: "system" },
   { to: "/settings", label: "Settings", icon: Settings, group: "system" },
 ];
 
