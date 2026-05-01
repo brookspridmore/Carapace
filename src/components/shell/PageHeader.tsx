@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-export function PageHeader({ eyebrow, title, description, actions }: {
-  eyebrow?: string; title: string; description?: string; actions?: ReactNode;
+export function PageHeader({ eyebrow, title, description, actions, hint }: {
+  eyebrow?: string; title: string; description?: string; actions?: ReactNode; hint?: ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
@@ -11,7 +11,10 @@ export function PageHeader({ eyebrow, title, description, actions }: {
             {eyebrow}
           </div>
         )}
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          {hint}
+        </div>
         {description && (
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">{description}</p>
         )}
