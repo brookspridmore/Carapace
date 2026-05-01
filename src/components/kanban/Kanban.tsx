@@ -27,6 +27,7 @@ export function Kanban() {
   const labelMap = useAgentLabelMap();
   const updateTask = useTaskStore((s) => s.updateTask);
   const moveTask = useTaskStore((s) => s.moveTask);
+  const addTask = useTaskStore((s) => s.addTask);
   const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
   const focusedTaskId = useTaskStore((s) => s.focusedTaskId);
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export function Kanban() {
   const [selected, setSelected] = useState<Task | null>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -105,7 +107,10 @@ export function Kanban() {
         </select>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-muted-foreground text-mono">{filtered.length} tasks</span>
-          <button className="text-xs px-2.5 py-1 rounded-md bg-yellow text-primary-foreground hover:opacity-90 flex items-center gap-1.5">
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="text-xs px-2.5 py-1 rounded-md bg-yellow text-primary-foreground hover:opacity-90 flex items-center gap-1.5"
+          >
             <Plus className="w-3.5 h-3.5" /> Task
           </button>
         </div>
@@ -130,6 +135,13 @@ export function Kanban() {
           onClose={() => setSelected(null)}
           onUpdate={(t) => { updateTask(t); setSelected(t); }}
           onOpenInFlow={openInFlow}
+        />
+      )}
+
+      {createOpen && (
+        <CreateTaskModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={(t) => { addTask(t); setCreateOpen(false); setSelected(t); }}
         />
       )}
     </div>
