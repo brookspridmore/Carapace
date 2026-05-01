@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { create } from "zustand";
 import { SNAPSHOTS, type Snapshot, type AgentId } from "./mock-data";
 
@@ -108,20 +109,27 @@ export function useSnapshotById(id?: string | null): Snapshot | undefined {
 }
 
 export function useSnapshotsForTask(taskId?: string | null): Snapshot[] {
-  return useSnapshotStore((s) =>
-    taskId ? s.snapshots.filter((x) => x.taskId === taskId) : [],
+  const snapshots = useSnapshotStore((s) => s.snapshots);
+  return useMemo(
+    () => (taskId ? snapshots.filter((x) => x.taskId === taskId) : []),
+    [snapshots, taskId],
   );
 }
 
 export function useFilteredSnapshots(): Snapshot[] {
-  return useSnapshotStore((s) => {
-    const f = s.filter;
-    const q = f.query.trim().toLowerCase();
-    return s.snapshots.filter((snap) => {
-      if (f.agentId !== "all" && snap.agentId !== f.agentId) return false;
-      if (f.taskId !== "all" && snap.taskId !== f.taskId) return false;
+  // IMPORTANT: select stable references from the store, then derive with
+  // useMemo. Returning a freshly-filtered array directly from a Zustand
+  // selector breaks useSyncExternalStore's snapshot caching and triggers
+  // "Maximum update depth exceeded".
+  const snapshots = useSnapshotStore((s) => s.snapshots);
+  const filter = useSnapshotStore((s) => s.filter);
+  return useMemo(() => {
+    const q = filter.query.trim().toLowerCase();
+    return snapshots.filter((snap) => {
+      if (filter.agentId !== "all" && snap.agentId !== filter.agentId) return false;
+      if (filter.taskId !== "all" && snap.taskId !== filter.taskId) return false;
       const status = snap.status ?? "active";
-      if (f.status !== "all" && status !== f.status) return false;
+      if (filter.status !== "all" && status !== filter.status) return false;
       if (q.length === 0) return true;
       const hay = [
         snap.id, snap.title ?? "", snap.objective, snap.currentState,
@@ -131,5 +139,5 @@ export function useFilteredSnapshots(): Snapshot[] {
       ].join(" ").toLowerCase();
       return hay.includes(q);
     });
-  });
+  }, [snapshots, filter]);
 }
