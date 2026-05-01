@@ -7,10 +7,11 @@ import {
 import "@xyflow/react/dist/style.css";
 import { nodeTypes } from "./nodes";
 import {
-  AGENTS, SNAPSHOTS, getSnapshotById, type Agent, type AgentId, type Task, type ToolKind, type Snapshot,
+  AGENTS, type Agent, type AgentId, type Task, type ToolKind, type Snapshot,
 } from "@/lib/mock-data";
 import { useTaskStore, isActiveTask } from "@/lib/task-store";
 import { useAgentLabelMap } from "@/lib/agent-registry";
+import { useSnapshotStore } from "@/lib/snapshot-store";
 import {
   ChevronUp, ChevronDown, Pause, Play, ArrowLeft,
   RotateCcw, Maximize2, Lock, Unlock, Filter, Layers, Sparkles,
@@ -112,6 +113,7 @@ type BuildOpts = {
   focusAgentId: AgentId; // only meaningful in focus mode
   density: "low" | "medium" | "high";
   focusedSnapshot: Snapshot | null;
+  snapshotsByTaskId: Record<string, Snapshot>;
 };
 
 function selectVisibleTasks(tasks: Task[], opts: BuildOpts): Task[] {
@@ -254,6 +256,7 @@ function buildTaskDrivenGraph(
       focusedTaskId: opts.focusedTaskId,
       density: opts.density,
       focusedSnapshot: opts.focusedSnapshot,
+      snapshotForTask: opts.snapshotsByTaskId[task.id],
       pushNode, edges,
     });
   });
@@ -295,12 +298,13 @@ function renderTaskPath(args: {
   focusedTaskId: string | null;
   density: "low" | "medium" | "high";
   focusedSnapshot: Snapshot | null;
+  snapshotForTask: Snapshot | undefined;
   pushNode: (n: Node) => void;
   edges: Edge[];
 }) {
   const {
     task, chiefId, subAgentId, taskPos, fanoutAX, fanoutBX,
-    laneTopY, laneBottomY, focusedTaskId, density, focusedSnapshot, pushNode, edges,
+    laneTopY, laneBottomY, focusedTaskId, density, focusedSnapshot, snapshotForTask, pushNode, edges,
   } = args;
   const taskId = `task-${task.id}`;
   const snapTaskFocus = focusedSnapshot?.taskId === task.id;
@@ -310,13 +314,13 @@ function renderTaskPath(args: {
   // Snapshot-related task gets a slight emphasis even if not the primary focus
   const snapshotRelated = !!focusedSnapshot && (
     focusedSnapshot.taskId === task.id ||
-    (task.snapshotId && task.snapshotId === focusedSnapshot.id)
+    (snapshotForTask?.id === focusedSnapshot.id)
   );
 
   pushNode({
     id: taskId, type: "task",
     position: taskPos,
-    data: { ...taskNodeData(task, focused), snapshotRelated } as unknown as Record<string, unknown>,
+    data: { ...taskNodeData(task, focused), snapshotRelated, hasSnapshot: !!snapshotForTask } as unknown as Record<string, unknown>,
   });
 
   const es = taskEdgeStyle(task);
@@ -475,15 +479,15 @@ function renderTaskPath(args: {
   });
 
   // ---- Snapshot (task-level) — always shown if linked, regardless of density.
-  if (task.snapshotId && density !== "low") {
-    const snap = SNAPSHOTS.find((s) => s.id === task.snapshotId);
+  if (snapshotForTask && density !== "low") {
+    const snap = snapshotForTask;
     const sid = `snap-${task.id}`;
-    const snapFocused = !!focusedSnapshot && focusedSnapshot.id === task.snapshotId;
+    const snapFocused = !!focusedSnapshot && focusedSnapshot.id === snap.id;
     pushNode({
       id: sid, type: "memory",
       position: { x: fanoutBX, y: Math.min(bY, laneBottomY - 50) },
       data: {
-        kind: "snapshot", ref: task.snapshotId,
+        kind: "snapshot", ref: snap.id,
         note: snap?.objective ? snap.objective.slice(0, 40) + (snap.objective.length > 40 ? "…" : "") : "linked snapshot",
         status: snap?.status,
         importance: snap?.importance,
