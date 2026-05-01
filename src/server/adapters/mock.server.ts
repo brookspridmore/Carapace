@@ -155,7 +155,10 @@ export const mockAdapter: OpenClawAdapter = {
     return useSnapshotStore.getState().snapshots.find((s) => s.id === id) ?? null;
   },
   async createMemoryWriteCandidate(input) {
-    return useMemoryStore.getState().proposeWrite(input);
+    return useMemoryStore.getState().proposeWrite({
+      ...input,
+      sourceAgentId: input.sourceAgentId as Snapshot["agentId"] | undefined,
+    });
   },
   async approveMemoryWrite(id, decision, overrideText) {
     useMemoryStore.getState().decide(id, decision, overrideText);
