@@ -27,6 +27,7 @@ export function Kanban() {
   const labelMap = useAgentLabelMap();
   const updateTask = useTaskStore((s) => s.updateTask);
   const moveTask = useTaskStore((s) => s.moveTask);
+  const addTask = useTaskStore((s) => s.addTask);
   const setFocusedTask = useTaskStore((s) => s.setFocusedTask);
   const focusedTaskId = useTaskStore((s) => s.focusedTaskId);
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export function Kanban() {
   const [selected, setSelected] = useState<Task | null>(null);
   const [filterAgent, setFilterAgent] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -105,7 +107,10 @@ export function Kanban() {
         </select>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-muted-foreground text-mono">{filtered.length} tasks</span>
-          <button className="text-xs px-2.5 py-1 rounded-md bg-yellow text-primary-foreground hover:opacity-90 flex items-center gap-1.5">
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="text-xs px-2.5 py-1 rounded-md bg-yellow text-primary-foreground hover:opacity-90 flex items-center gap-1.5"
+          >
             <Plus className="w-3.5 h-3.5" /> Task
           </button>
         </div>
@@ -130,6 +135,13 @@ export function Kanban() {
           onClose={() => setSelected(null)}
           onUpdate={(t) => { updateTask(t); setSelected(t); }}
           onOpenInFlow={openInFlow}
+        />
+      )}
+
+      {createOpen && (
+        <CreateTaskModal
+          onClose={() => setCreateOpen(false)}
+          onCreate={(t) => { addTask(t); setCreateOpen(false); setSelected(t); }}
         />
       )}
     </div>
@@ -473,6 +485,189 @@ function Link({ label, value }: { label: string; value?: string }) {
       <div className={cn("truncate", value ? "text-foreground" : "text-muted-foreground")}>
         {value ?? "—"}
       </div>
+    </div>
+  );
+}
+
+function CreateTaskModal({ onClose, onCreate }: {
+  onClose: () => void;
+  onCreate: (t: Task) => void;
+}) {
+  const labelMap = useAgentLabelMap();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [agentId, setAgentId] = useState<string>("");
+  const [priority, setPriority] = useState<Priority>("medium");
+  const [status, setStatus] = useState<TaskStatus>("inbox");
+  const [dueDate, setDueDate] = useState<string>("");
+  const [subtaskInput, setSubtaskInput] = useState("");
+  const [subtasks, setSubtasks] = useState<{ id: string; title: string; done: boolean }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  function addSubtask() {
+    const t = subtaskInput.trim();
+    if (!t) return;
+    setSubtasks((cur) => [...cur, { id: `st_${Date.now().toString(36)}_${cur.length}`, title: t, done: false }]);
+    setSubtaskInput("");
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) {
+      setError("Title is required");
+      return;
+    }
+    const finalAgent = (agentId || AGENTS[0]?.id || "chief") as Task["agentId"];
+    const task: Task = {
+      id: `t_${Date.now().toString(36)}`,
+      title: title.trim(),
+      description: description.trim(),
+      agentId: finalAgent,
+      priority,
+      status,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+      subtasks,
+      outputs: [],
+      logTail: [],
+      createdAt: new Date().toISOString(),
+      toolsUsed: [],
+      memoryRefs: [],
+    };
+    onCreate(task);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <form
+        onSubmit={submit}
+        className="relative panel border border-border rounded-lg w-full max-w-md mx-4 shadow-2xl"
+      >
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold tracking-tight">Create task</h3>
+          <button type="button" onClick={onClose} className="p-1 rounded-md hover:bg-surface text-muted-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-3 max-h-[70vh] overflow-y-auto">
+          <Field label="Title *">
+            <input
+              autoFocus
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); if (error) setError(null); }}
+              placeholder="Short, action-oriented title"
+              className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full"
+            />
+            {error && <div className="text-[11px] text-coral mt-1">{error}</div>}
+          </Field>
+
+          <Field label="Description">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              placeholder="What needs to happen, context, constraints…"
+              className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full resize-none"
+            />
+          </Field>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Assigned agent">
+              <select
+                value={agentId}
+                onChange={(e) => setAgentId(e.target.value)}
+                className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full"
+              >
+                <option value="">— Unassigned —</option>
+                {AGENTS.map((a) => (
+                  <option key={a.id} value={a.id}>{labelMap[a.id] ?? a.name}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Priority">
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as Priority)}
+                className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </Field>
+
+            <Field label="Status">
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full"
+              >
+                {TASK_STATUSES.map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Due date">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="surface border border-border rounded-md px-2 py-1.5 text-sm w-full"
+              />
+            </Field>
+          </div>
+
+          <Field label={`Subtasks (${subtasks.length})`}>
+            <div className="flex gap-1.5">
+              <input
+                value={subtaskInput}
+                onChange={(e) => setSubtaskInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+                placeholder="Add a subtask and press Enter"
+                className="surface border border-border rounded-md px-2 py-1.5 text-sm flex-1"
+              />
+              <button type="button" onClick={addSubtask} className="px-2 py-1 rounded-md surface border border-border text-xs hover:border-yellow/60">Add</button>
+            </div>
+            {subtasks.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {subtasks.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between text-xs surface border border-border rounded-md px-2 py-1">
+                    <span>{s.title}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSubtasks((cur) => cur.filter((x) => x.id !== s.id))}
+                      className="text-muted-foreground hover:text-coral"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Field>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-md surface border border-border text-xs hover:border-border">
+            Cancel
+          </button>
+          <button type="submit" className="px-3 py-1.5 rounded-md bg-yellow text-primary-foreground text-xs font-medium hover:opacity-90">
+            Create task
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground text-mono mb-1">{label}</div>
+      {children}
     </div>
   );
 }
