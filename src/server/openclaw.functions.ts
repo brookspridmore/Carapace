@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getAdapter, getOpenClawBaseUrl } from "./openclaw.server";
-import type { TaskStatus } from "@/lib/mock-data";
+import type { TaskStatus, Snapshot } from "@/lib/mock-data";
 import type { AgentAliasInput } from "./adapters/types";
+import type { WriteLayer } from "@/lib/memory-store";
 
 export const ocHealth = createServerFn({ method: "GET" }).handler(async () => {
   const adapter = getAdapter();
@@ -76,4 +77,47 @@ export const ocWriteOpenClawConfig = createServerFn({ method: "POST" })
   .inputValidator((data: { payload: string; rawIds: string[]; operatorNote?: string }) => data)
   .handler(async ({ data }) => {
     return getAdapter().writeOpenClawConfig(data.payload, { rawIds: data.rawIds, operatorNote: data.operatorNote });
+  });
+
+// ---- Memory + snapshot bridge ---------------------------------------------
+
+export const ocListMemorySources = createServerFn({ method: "GET" }).handler(async () => {
+  return getAdapter().listMemorySources();
+});
+
+export const ocSearchMemory = createServerFn({ method: "POST" })
+  .inputValidator((data: { query: string; topK?: number }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().searchMemory(data.query, { topK: data.topK });
+  });
+
+export const ocCreateSnapshot = createServerFn({ method: "POST" })
+  .inputValidator((data: Omit<Snapshot, "createdAt" | "updatedAt">) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().createSnapshot(data);
+  });
+
+export const ocUpdateSnapshot = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string; patch: Partial<Snapshot> }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().updateSnapshot(data.id, data.patch);
+  });
+
+export const ocCreateMemoryWriteCandidate = createServerFn({ method: "POST" })
+  .inputValidator((data: {
+    proposedMemory: string;
+    sourceTaskId?: string;
+    sourceAgentId?: string;
+    targetLayer: WriteLayer;
+    reason: string;
+    confidence: number;
+  }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().createMemoryWriteCandidate(data);
+  });
+
+export const ocApproveMemoryWrite = createServerFn({ method: "POST" })
+  .inputValidator((data: { id: string; decision: "approve" | "reject"; overrideText?: string }) => data)
+  .handler(async ({ data }) => {
+    return getAdapter().approveMemoryWrite(data.id, data.decision, data.overrideText);
   });

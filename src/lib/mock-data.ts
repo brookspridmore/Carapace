@@ -357,9 +357,17 @@ export interface Snapshot {
   createdAt: string;
   // New: snapshot lifecycle + influence
   taskId?: string;             // which task this snapshot belongs to
-  status?: "active" | "stale" | "completed";
+  status?: "active" | "stale" | "completed" | "archived";
   importance?: number;         // 0..1 — drives node emphasis
   updatedAt?: string;          // ISO of last write
+  // ---- Carapace v1.1 structured snapshot fields ----
+  title?: string;
+  conversationId?: string;
+  openQuestions?: string[];
+  conversationRefs?: string[];
+  artifacts?: string[];
+  retrievalKeywords?: string[];
+  confidenceScore?: number;    // 0..1
 }
 
 export const SNAPSHOTS: Snapshot[] = [
@@ -369,6 +377,16 @@ export const SNAPSHOTS: Snapshot[] = [
     taskId: "t-001",
     status: "active",
     importance: 0.92,
+    confidenceScore: 0.81,
+    title: "Q4 launch — execution snapshot",
+    conversationId: "conv_chief_launch",
+    openQuestions: [
+      "Do we hold the launch if ops budget slips past Monday?",
+      "Which subagent owns the post-launch incident channel?",
+    ],
+    conversationRefs: ["conv_chief_launch"],
+    artifacts: ["launch-brief.md", "rollout-plan.md"],
+    retrievalKeywords: ["q4", "launch", "rollout", "phased", "tuesday"],
     updatedAt: iso(0),
     objective: "Successfully ship Q4 launch with coordinated comms and zero downtime.",
     currentState: "Marketing copy in review. Builder implementing webhook signer. Ops blocked on budget.",
@@ -393,6 +411,13 @@ export const SNAPSHOTS: Snapshot[] = [
     taskId: "t-003",
     status: "active",
     importance: 0.78,
+    confidenceScore: 0.9,
+    title: "Launch email sequence — review-ready",
+    conversationId: "conv_marketing_launch",
+    openQuestions: ["Should email 5 include a discount or stay value-led?"],
+    conversationRefs: ["conv_marketing_launch"],
+    artifacts: ["email-1.md", "email-2.md", "email-3.md", "email-4.md", "email-5.md"],
+    retrievalKeywords: ["email", "sequence", "launch", "drip", "brand voice"],
     updatedAt: iso(0),
     objective: "Five-email launch sequence ready for operator review.",
     currentState: "All five drafts written, voice-checked against brand guide.",

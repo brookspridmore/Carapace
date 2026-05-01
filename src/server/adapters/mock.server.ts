@@ -8,7 +8,10 @@ import {
   LOGS,
   type Task,
   type TaskStatus,
+  type Snapshot,
 } from "@/lib/mock-data";
+import { useMemoryStore } from "@/lib/memory-store";
+import { useSnapshotStore } from "@/lib/snapshot-store";
 import type {
   OpenClawAdapter,
   AgentAliasInput,
@@ -126,5 +129,39 @@ export const mockAdapter: OpenClawAdapter = {
       audit,
     };
     return result;
+  },
+
+  // ---- Memory + snapshot bridge (mock backed by client stores) ------------
+  // NOTE: in the preview these stores live in the browser, so the server
+  // function returns the seeded snapshot from mock-data. Real adapter on the
+  // VPS will read/write OpenClaw filesystem.
+  async listMemorySources() {
+    return useMemoryStore.getState().sources;
+  },
+  async searchMemory(query, opts) {
+    return useMemoryStore.getState().search(query, { topK: opts?.topK }).hits;
+  },
+  async createSnapshot(input) {
+    const ts = new Date().toISOString();
+    const snap: Snapshot = { ...input, createdAt: ts, updatedAt: ts };
+    useSnapshotStore.getState().upsert(snap);
+    return snap;
+  },
+  async updateSnapshot(id, patch) {
+    const store = useSnapshotStore.getState();
+    const existing = store.snapshots.find((s) => s.id === id);
+    if (!existing) return null;
+    store.patch(id, patch);
+    return useSnapshotStore.getState().snapshots.find((s) => s.id === id) ?? null;
+  },
+  async createMemoryWriteCandidate(input) {
+    return useMemoryStore.getState().proposeWrite({
+      ...input,
+      sourceAgentId: input.sourceAgentId as Snapshot["agentId"] | undefined,
+    });
+  },
+  async approveMemoryWrite(id, decision, overrideText) {
+    useMemoryStore.getState().decide(id, decision, overrideText);
+    return useMemoryStore.getState().candidates.find((c) => c.id === id) ?? null;
   },
 };

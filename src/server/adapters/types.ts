@@ -8,6 +8,12 @@ import type {
   ProviderConfig,
   LogEntry,
 } from "@/lib/mock-data";
+import type {
+  MemorySource,
+  MemorySearchHit,
+  MemoryWriteCandidate,
+  WriteLayer,
+} from "@/lib/memory-store";
 
 // Friendly-name overlay coming from Carapace alias storage and/or a parsed
 // OpenClaw config file. The raw OpenClaw id is the join key.
@@ -87,4 +93,22 @@ export interface OpenClawAdapter {
     rawIds: string[];          // which agents are being touched (for audit)
     operatorNote?: string;
   }): Promise<ConfigWriteResult>;
+
+  // ---- Memory + snapshot bridge -------------------------------------------
+  // These are intentionally narrow so the real OpenClaw filesystem adapter
+  // can drop in without UI changes. Today they all run against the in-memory
+  // mock stores.
+  listMemorySources(): Promise<MemorySource[]>;
+  searchMemory(query: string, opts?: { topK?: number }): Promise<MemorySearchHit[]>;
+  createSnapshot(input: Omit<Snapshot, "createdAt" | "updatedAt">): Promise<Snapshot>;
+  updateSnapshot(id: string, patch: Partial<Snapshot>): Promise<Snapshot | null>;
+  createMemoryWriteCandidate(input: {
+    proposedMemory: string;
+    sourceTaskId?: string;
+    sourceAgentId?: string;
+    targetLayer: WriteLayer;
+    reason: string;
+    confidence: number;
+  }): Promise<MemoryWriteCandidate>;
+  approveMemoryWrite(id: string, decision: "approve" | "reject", overrideText?: string): Promise<MemoryWriteCandidate | null>;
 }

@@ -7,12 +7,14 @@ import { useDraggable } from "@dnd-kit/core";
 import {
   TASK_STATUSES, AGENTS, type Task, type TaskStatus, type Priority,
 } from "@/lib/mock-data";
-import { Paperclip, Camera, MessagesSquare, GitBranch, X, Plus, Filter, GitMerge } from "lucide-react";
+import { Paperclip, Camera, MessagesSquare, GitBranch, X, Plus, Filter, GitMerge, Play, FilePlus2, Eye, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useTaskStore } from "@/lib/task-store";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useAgentLabelMap } from "@/lib/agent-registry";
+import { useSnapshotStore, useSnapshotsForTask } from "@/lib/snapshot-store";
+import { useMemoryStore } from "@/lib/memory-store";
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   high: "bg-coral",
@@ -188,6 +190,10 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
   const labelMap = useAgentLabelMap();
   const agentName = labelMap[task.agentId] ?? agent?.name ?? task.agentId;
   const subDone = task.subtasks.filter((s) => s.done).length;
+  const snaps = useSnapshotsForTask(task.id);
+  const primary = snaps[0];
+  const importance = primary?.importance ?? 0;
+  const status = primary?.status ?? "active";
   return (
     <div
       className={cn(
@@ -211,7 +217,7 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
           <span>{format(new Date(task.dueDate), "MMM d")}</span>
         )}
       </div>
-      {(task.subtasks.length > 0 || task.outputs.length > 0 || task.snapshotId || task.conversationId) && (
+      {(task.subtasks.length > 0 || task.outputs.length > 0 || primary || task.conversationId) && (
         <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
           {task.subtasks.length > 0 && (
             <span className="flex items-center gap-1"><GitBranch className="w-3 h-3" />{subDone}/{task.subtasks.length}</span>
@@ -219,7 +225,21 @@ function Card({ task, dragging = false, highlighted = false }: { task: Task; dra
           {task.outputs.length > 0 && (
             <span className="flex items-center gap-1"><Paperclip className="w-3 h-3" />{task.outputs.length}</span>
           )}
-          {task.snapshotId && <Camera className="w-3 h-3" />}
+          {primary && (
+            <span className={cn("flex items-center gap-1",
+              status === "active" ? "text-sky" :
+              status === "stale" ? "text-yellow" :
+              "text-muted-foreground")}
+              title={`Snapshot ${primary.id} · ${status}`}>
+              <Camera className="w-3 h-3" />
+              <span className="capitalize">{status}</span>
+            </span>
+          )}
+          {primary && importance >= 0.8 && (
+            <span className="flex items-center gap-1 text-coral" title={`Importance ${Math.round(importance * 100)}%`}>
+              <Flame className="w-3 h-3" /> {Math.round(importance * 100)}%
+            </span>
+          )}
           {task.conversationId && <MessagesSquare className="w-3 h-3" />}
         </div>
       )}
@@ -231,6 +251,49 @@ function TaskDrawer({ task, onClose, onUpdate, onOpenInFlow }: {
   task: Task; onClose: () => void; onUpdate: (t: Task) => void; onOpenInFlow: (t: Task) => void;
 }) {
   const agent = AGENTS.find((a) => a.id === task.agentId);
+  const navigate = useNavigate();
+  const snaps = useSnapshotsForTask(task.id);
+  const primary = snaps[0];
+  const upsert = useSnapshotStore((s) => s.upsert);
+  const setFocusedSnapshot = useTaskStore((s) => s.setFocusedSnapshot);
+  const recordResume = useMemoryStore((s) => s.recordResume);
+
+  function createSnapshot() {
+    const id = `snap_${task.id}_${Date.now().toString(36)}`;
+    upsert({
+      id,
+      title: `Snapshot — ${task.title}`,
+      agentId: task.agentId,
+      taskId: task.id,
+      conversationId: task.conversationId,
+      status: "active",
+      importance: 0.5,
+      confidenceScore: 0.5,
+      objective: task.description,
+      currentState: task.logTail.slice(-3).join(" / ") || "No recent activity recorded.",
+      decisions: [],
+      openQuestions: [],
+      nextActions: task.subtasks.filter((s) => !s.done).map((s) => s.title),
+      blockers: [],
+      files: task.outputs,
+      memoryRefs: task.memoryRefs ?? [],
+      conversationRefs: task.conversationId ? [task.conversationId] : [],
+      artifacts: [],
+      retrievalKeywords: task.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    onUpdate({ ...task, snapshotId: id });
+    navigate({ to: "/snapshots" });
+  }
+
+  function resumeSnapshot() {
+    if (!primary) return;
+    setFocusedSnapshot(primary.id);
+    recordResume(primary.id, primary.agentId, primary.taskId);
+    navigate({ to: "/", search: { snapshot: primary.id } as never });
+  }
+
   return (
     <div className="fixed inset-0 z-40 pointer-events-none">
       <div className="absolute inset-0 bg-black/40 pointer-events-auto" onClick={onClose} />
@@ -259,6 +322,64 @@ function TaskDrawer({ task, onClose, onUpdate, onOpenInFlow }: {
         <div className="p-5 space-y-5">
           <Section title="Description">
             <p className="text-sm text-foreground/90 leading-relaxed">{task.description}</p>
+          </Section>
+
+          <Section title={primary ? `Snapshot · ${primary.status ?? "active"}` : "Snapshot"}>
+            {primary ? (
+              <div className="space-y-2">
+                <div className="surface border border-sky/40 rounded-md p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="text-mono text-[10px] text-muted-foreground">{primary.id}</div>
+                    <div className="text-[10px] text-mono text-yellow">
+                      importance {Math.round((primary.importance ?? 0) * 100)}%
+                    </div>
+                  </div>
+                  {primary.title && <div className="text-xs font-medium mb-1">{primary.title}</div>}
+                  <div className="text-xs text-foreground/80 line-clamp-2">{primary.objective}</div>
+                  {(primary.nextActions ?? []).length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] uppercase text-mono text-yellow mb-1">Next actions</div>
+                      <ul className="space-y-0.5 text-[12px]">
+                        {primary.nextActions.slice(0, 3).map((a, i) => (
+                          <li key={i} className="flex gap-1.5"><span className="text-yellow">→</span>{a}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {primary.blockers.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] uppercase text-mono text-coral mb-1">Blockers</div>
+                      <ul className="space-y-0.5 text-[12px]">
+                        {primary.blockers.map((b, i) => <li key={i} className="flex gap-1.5"><span className="text-coral">!</span>{b}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {primary.decisions.length > 0 && (
+                    <div className="mt-2">
+                      <div className="text-[10px] uppercase text-mono text-muted-foreground mb-1">Decisions</div>
+                      <ul className="space-y-0.5 text-[12px]">
+                        {primary.decisions.slice(0, 3).map((d, i) => <li key={i} className="flex gap-1.5"><span className="text-muted-foreground">·</span>{d}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  <button onClick={resumeSnapshot} className="flex-1 px-2 py-1.5 rounded-md bg-yellow text-primary-foreground text-[11px] font-medium flex items-center justify-center gap-1.5 hover:opacity-90">
+                    <Play className="w-3 h-3" /> Resume in Flow
+                  </button>
+                  <button onClick={() => navigate({ to: "/snapshots" })} className="flex-1 px-2 py-1.5 rounded-md surface border border-border text-[11px] flex items-center justify-center gap-1.5 hover:border-yellow/60">
+                    <Eye className="w-3 h-3" /> Open snapshot
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="text-xs text-muted-foreground">No snapshot yet. Capture current operational state so this task can be resumed cleanly later.</div>
+                <button onClick={createSnapshot} className="px-2 py-1.5 rounded-md bg-yellow text-primary-foreground text-[11px] font-medium flex items-center gap-1.5 hover:opacity-90">
+                  <FilePlus2 className="w-3 h-3" /> Create snapshot
+                </button>
+              </div>
+            )}
           </Section>
 
           <Section title="Agent">
