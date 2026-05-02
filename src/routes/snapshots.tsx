@@ -232,6 +232,7 @@ function SnapshotsPage() {
           />
         )}
       </div>
+      )}
     </AppShell>
   );
 }
