@@ -739,6 +739,12 @@ function FlowEngineInner() {
       groups,
     }).then((res) => {
       setElkNodes(res.nodes);
+      // Explicitly push the fresh layout into ReactFlow's internal node state.
+      // Without this, user-dragged positions applied via onNodesChange persist
+      // because decoratedNodes' useEffect won't re-run if elkNodes reference
+      // happens to be stable across renders.
+      setNodes(res.nodes.map((n) => ({ ...n, draggable: !layoutLocked })));
+      setEdges(baseGraph.edges);
       setElkRunning(false);
       setTimeout(() => fitView({ padding: 0.15, duration: 400 }), 60);
     });
