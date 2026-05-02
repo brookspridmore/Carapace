@@ -271,22 +271,42 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
       const out: LogEntry[] = [];
       const infos = await readAgentDirs(root);
       for (const info of infos) {
-        const logsDir = path.join(info.dir, "logs");
-        const files = (await safeReaddir(logsDir)).filter((f) => f.endsWith(".log") || f.endsWith(".jsonl"));
-        // Sort newest-first by name (timestamps in filename), best-effort.
-        files.sort().reverse();
-        for (const f of files.slice(0, 3)) {
-          const raw = await safeRead(path.join(logsDir, f));
-          if (!raw) continue;
-          const lines = raw.split(/\r?\n/).filter(Boolean).slice(-Math.ceil(limit / Math.max(infos.length, 1)));
-          for (const line of lines) {
-            out.push({
-              id: `${info.rawId}:${f}:${out.length}`,
-              ts: new Date().toISOString(),
-              level: "info",
-              agentId: info.rawId as unknown as AgentId,
-              message: line.slice(0, 500),
-            } as LogEntry);
+        // Real OpenClaw stores activity under sessions/*.jsonl. Also check
+        // a legacy logs/ dir if present.
+        const candidateDirs = [path.join(info.dir, "sessions"), path.join(info.dir, "logs")];
+        for (const logsDir of candidateDirs) {
+          const files = (await safeReaddir(logsDir)).filter(
+            (f) => f.endsWith(".log") || f.endsWith(".jsonl"),
+          );
+          files.sort().reverse();
+          for (const f of files.slice(0, 3)) {
+            const raw = await safeRead(path.join(logsDir, f));
+            if (!raw) continue;
+            const lines = raw
+              .split(/\r?\n/)
+              .filter(Boolean)
+              .slice(-Math.ceil(limit / Math.max(infos.length, 1)));
+            for (const line of lines) {
+              let message = line.slice(0, 500);
+              let ts = new Date().toISOString();
+              if (line.startsWith("{")) {
+                try {
+                  const obj = JSON.parse(line);
+                  if (typeof obj.message === "string") message = obj.message.slice(0, 500);
+                  else if (typeof obj.content === "string") message = obj.content.slice(0, 500);
+                  else if (typeof obj.text === "string") message = obj.text.slice(0, 500);
+                  if (typeof obj.timestamp === "string") ts = obj.timestamp;
+                  else if (typeof obj.ts === "string") ts = obj.ts;
+                } catch { /* keep raw line */ }
+              }
+              out.push({
+                id: `${info.rawId}:${f}:${out.length}`,
+                ts,
+                level: "info",
+                agentId: info.rawId as unknown as AgentId,
+                message,
+              } as LogEntry);
+            }
           }
         }
       }
