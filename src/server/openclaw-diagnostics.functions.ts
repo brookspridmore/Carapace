@@ -34,7 +34,7 @@ export interface FsDiagnosticsReport {
   logs: FsItem[];
   configs: FsItem[];
   suggestions: { path: string; exists: boolean }[];
-  raw: unknown;
+  raw: Record<string, unknown>;
 }
 
 function expandHome(p: string): string {
