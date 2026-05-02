@@ -197,3 +197,200 @@ function CopyBlock({ value }: { value: string }) {
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Filesystem Diagnostics
+// ---------------------------------------------------------------------------
+
+function FilesystemDiagnosticsPanel() {
+  const [report, setReport] = useState<FsDiagnosticsReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [showRaw, setShowRaw] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const runScan = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await ocFilesystemDiagnostics();
+      setReport(r);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { runScan(); }, []);
+
+  return (
+    <section className="panel border border-border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] uppercase tracking-wider text-mono text-muted-foreground flex items-center gap-2">
+          <FolderSearch className="w-3.5 h-3.5" /> Filesystem Diagnostics
+        </div>
+        <button
+          onClick={runScan}
+          disabled={loading}
+          className="flex items-center gap-1 text-[11px] text-mono surface border border-border rounded-md px-2 py-1 hover:border-yellow/60 disabled:opacity-50"
+        >
+          <RefreshCw className={cn("w-3 h-3", loading && "animate-spin")} />
+          {loading ? "scanning…" : "Run Filesystem Scan"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="surface border border-coral/40 rounded-md p-2 mb-3">
+          <div className="text-[11px] text-coral text-mono">{error}</div>
+        </div>
+      )}
+
+      {report && <FsReportView report={report} showRaw={showRaw} setShowRaw={setShowRaw} />}
+
+      {!report && !loading && (
+        <div className="text-[11px] text-muted-foreground">No scan yet.</div>
+      )}
+
+      <p className="text-[11px] text-muted-foreground mt-3">
+        Read-only. This panel never writes to OpenClaw — it only inspects what Carapace can see at <span className="text-mono">OPENCLAW_ROOT_PATH</span>.
+      </p>
+    </section>
+  );
+}
+
+function FsReportView({ report, showRaw, setShowRaw }: { report: FsDiagnosticsReport; showRaw: boolean; setShowRaw: (v: boolean) => void }) {
+  const summaryTone =
+    !report.exists ? "text-coral" :
+    !report.readable ? "text-coral" :
+    report.agents.length === 0 ? "text-yellow" :
+    "text-sky";
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 text-[11px] text-mono">
+        <DebugRow label="root path" value={report.rootPath ?? "—"} />
+        <DebugRow label="env set" value={report.rootEnvSet ? "yes" : "no"} />
+        <DebugRow label="exists" value={<span className={summaryTone}>{report.exists ? "yes" : "no"}</span>} />
+        <DebugRow label="readable" value={report.readable ? "yes" : "no"}/>
+        <DebugRow label="is directory" value={report.isDirectory ? "yes" : "no"} />
+        <DebugRow label="scanned at" value={report.scannedAt} />
+        <DebugRow label="duration" value={`${report.durationMs}ms`} />
+        <DebugRow label="subdirs" value={report.subdirectories.join(", ") || "—"} />
+      </div>
+
+      {/* Honest empty / error states */}
+      {!report.rootPath && (
+        <EmptyBanner kind="error" title="OPENCLAW_ROOT_PATH not set"
+          body="Set the env var on the server (e.g. ~/.openclaw) and restart Carapace." />
+      )}
+      {report.rootPath && !report.exists && (
+        <EmptyBanner kind="error" title="Root path not found"
+          body={`No directory at ${report.rootPath}. Check the path or try one of the suggestions below.`} />
+      )}
+      {report.exists && !report.readable && (
+        <EmptyBanner kind="error" title="Permission denied reading path"
+          body={`Carapace cannot read ${report.rootPath}. Check filesystem permissions for the user running the Carapace server.`} />
+      )}
+      {report.exists && report.readable && report.agents.length === 0 && (
+        <EmptyBanner kind="warn" title="Root path found but no agents detected"
+          body={`Carapace found ${report.rootPath} but no agent directories under /agents.`} />
+      )}
+      {report.agents.length > 0 && report.memory.length === 0 && (
+        <EmptyBanner kind="warn" title="Agents detected but no memory files found"
+          body="No MEMORY.md or DREAMS.md files were found. Memory features will show empty state." />
+      )}
+      {report.errors.length > 0 && report.exists && report.readable && report.agents.length > 0 && report.memory.length > 0 && (
+        <EmptyBanner kind="warn" title="Scan completed with notes" body={report.errors.join(" · ")} />
+      )}
+
+      <ItemSection title="Agents" icon={<Folder className="w-3 h-3" />} items={report.agents} kind="agent" />
+      <ItemSection title="Memory files" icon={<Database className="w-3 h-3" />} items={report.memory} kind="memory" />
+      <ItemSection title="Sessions" icon={<FileText className="w-3 h-3" />} items={report.sessions} kind="session" />
+      <ItemSection title="Logs" icon={<ScrollText className="w-3 h-3" />} items={report.logs} kind="log" />
+      <ItemSection title="Config files" icon={<SettingsIcon className="w-3 h-3" />} items={report.configs} kind="config" />
+
+      {report.agents.length === 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-mono text-muted-foreground mb-2">Path suggestions</div>
+          <div className="space-y-1">
+            {report.suggestions.map((s) => (
+              <div key={s.path} className="flex items-center justify-between surface border border-border rounded-md px-2 py-1 text-[11px] text-mono">
+                <span className="break-all">{s.path}</span>
+                <span className={s.exists ? "text-sky" : "text-muted-foreground"}>
+                  {s.exists ? <CheckCircle2 className="w-3 h-3 inline" /> : "not found"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <button
+          onClick={() => setShowRaw(!showRaw)}
+          className="text-[11px] text-mono text-muted-foreground hover:text-foreground"
+        >
+          {showRaw ? "▼" : "▶"} raw scan JSON
+        </button>
+        {showRaw && (
+          <pre className="surface border border-border rounded-md p-2 text-[11px] text-mono whitespace-pre-wrap break-all max-h-64 overflow-auto mt-2">
+            {report.raw}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ItemSection({ title, icon, items, kind }: { title: string; icon: React.ReactNode; items: FsItem[]; kind: FsItemKind }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-mono text-muted-foreground mb-1 flex items-center gap-1.5">
+        {icon} {title} <span className="text-foreground/60">({items.length})</span>
+      </div>
+      {items.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground italic">none detected</div>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-auto">
+          {items.map((it) => (
+            <div key={it.path} className="surface border border-border rounded-md px-2 py-1 text-[11px] text-mono flex items-center gap-2">
+              <span className="text-yellow uppercase text-[9px] w-12 shrink-0">{kind}</span>
+              <span className="flex-1 break-all">{it.path}</span>
+              <span className="text-muted-foreground shrink-0">{formatSize(it.size)}</span>
+              <span className="text-muted-foreground shrink-0">{formatTs(it.modifiedAt)}</span>
+              <span className={cn("shrink-0", it.readable ? "text-sky" : "text-coral")}>{it.readable ? "R" : "✕"}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyBanner({ kind, title, body }: { kind: "warn" | "error"; title: string; body: string }) {
+  const tone = kind === "error" ? "border-coral/40 text-coral" : "border-yellow/40 text-yellow";
+  return (
+    <div className={cn("surface border rounded-md p-2 flex items-start gap-2", tone)}>
+      <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+      <div>
+        <div className="text-[11px] text-mono">{title}</div>
+        <div className="text-[11px] text-mono text-foreground/70 mt-0.5">{body}</div>
+      </div>
+    </div>
+  );
+}
+
+function formatSize(n: number | null): string {
+  if (n === null) return "—";
+  if (n < 1024) return `${n}B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}K`;
+  return `${(n / 1024 / 1024).toFixed(1)}M`;
+}
+
+function formatTs(ts: string | null): string {
+  if (!ts) return "—";
+  try {
+    const d = new Date(ts);
+    return d.toISOString().slice(0, 16).replace("T", " ");
+  } catch { return ts; }
+}
