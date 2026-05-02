@@ -50,7 +50,12 @@ function ApprovalsPage() {
         }
       />
       <div className="p-6 space-y-3 max-w-3xl">
-        {items.map((a) => {
+        {items.length === 0 ? (
+          <EmptyState
+            icon={<ShieldCheck className="w-5 h-5 text-muted-foreground" />}
+            message="No approvals pending."
+          />
+        ) : items.map((a) => {
           const Icon = TYPE_ICON[a.type];
           const agentName = labelMap[a.agentId] ?? AGENTS.find((x) => x.id === a.agentId)?.name ?? a.agentId;
           const decided = a.status !== "pending";
