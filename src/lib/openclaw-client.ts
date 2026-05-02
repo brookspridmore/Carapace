@@ -31,9 +31,9 @@ export {
   ocUpdateSnapshot,
   ocCreateMemoryWriteCandidate,
   ocApproveMemoryWrite,
-} from "@/server/openclaw.functions";
+} from "@/rpc/openclaw.functions";
 
-export { ocFilesystemDiagnostics } from "@/server/openclaw-diagnostics.functions";
+export { ocFilesystemDiagnostics } from "@/rpc/openclaw-diagnostics.functions";
 
 // Re-export client-safe diagnostic types so callers don't reach into /server.
 export type {
@@ -42,7 +42,7 @@ export type {
   FsItemKind,
 } from "@/lib/openclaw-diagnostics-types";
 
-import { ocStatus } from "@/server/openclaw.functions";
+import { ocStatus } from "@/rpc/openclaw.functions";
 
 // Convenience helper used by useOpenClawStatus.
 export async function getOpenClawStatus() {
