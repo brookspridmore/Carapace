@@ -123,13 +123,58 @@ async function readAgentDirs(root: string): Promise<AgentDirInfo[]> {
     const dir = path.join(agentsDir, name);
     const st = await safeStat(dir);
     if (!st || !st.isDirectory()) continue;
-    // Try common config filenames.
-    let configRaw: string | null = null;
+    // Real OpenClaw layout:
+    //   agents/<id>/agent/models.json
+    //   agents/<id>/agent/auth-profiles.json
+    //   agents/<id>/agent/auth-state.json
+    //   agents/<id>/sessions/sessions.json
+    //   agents/<id>/sessions/*.jsonl
+    // Legacy/optional:
+    //   agents/<id>/agent.json|config.json|agent.toml|config.toml
+    //   agents/<id>/MEMORY.md
+    //
+    // No config file is required. An agent is simply any directory under
+    // OPENCLAW_ROOT_PATH/agents/*. Missing config files are NOT errors.
+    const config: Record<string, string> = {};
+
+    // Optional legacy single-file configs at the agent root.
     for (const fname of ["agent.json", "config.json", "agent.toml", "config.toml"]) {
-      configRaw = await safeRead(path.join(dir, fname));
-      if (configRaw) break;
+      const raw = await safeRead(path.join(dir, fname));
+      if (raw) {
+        Object.assign(config, parseAgentConfig(raw));
+        break;
+      }
     }
-    const config = configRaw ? parseAgentConfig(configRaw) : {};
+
+    // Real OpenClaw `agent/` subfolder.
+    const agentSub = path.join(dir, "agent");
+    const modelsRaw = await safeRead(path.join(agentSub, "models.json"));
+    if (modelsRaw) {
+      try {
+        const parsed = JSON.parse(modelsRaw);
+        const first = Array.isArray(parsed)
+          ? parsed[0]
+          : Array.isArray(parsed?.models)
+            ? parsed.models[0]
+            : parsed?.default ?? parsed;
+        if (first && typeof first === "object") {
+          if (typeof first.model === "string") config.model = first.model;
+          if (typeof first.id === "string" && !config.model) config.model = first.id;
+          if (typeof first.provider === "string") config.provider = first.provider;
+        }
+      } catch { /* ignore */ }
+    }
+    const authRaw = await safeRead(path.join(agentSub, "auth-profiles.json"));
+    if (authRaw) {
+      try {
+        const parsed = JSON.parse(authRaw);
+        const profile = Array.isArray(parsed) ? parsed[0] : parsed?.default ?? parsed;
+        if (profile && typeof profile === "object" && typeof profile.provider === "string" && !config.provider) {
+          config.provider = profile.provider;
+        }
+      } catch { /* ignore */ }
+    }
+
     const memStat = await safeStat(path.join(dir, "MEMORY.md"));
     out.push({
       rawId: name,
