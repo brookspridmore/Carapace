@@ -9,7 +9,7 @@ export type { FsDiagnosticsReport, FsItem, FsItemKind } from "@/lib/openclaw-dia
 // so this file stays safe to import from React route files.
 export const ocFilesystemDiagnostics = createServerFn({ method: "GET" }).handler(
   async (): Promise<FsDiagnosticsReport> => {
-    const { runFilesystemDiagnostics } = await import("./openclaw-diagnostics.server");
+    const { runFilesystemDiagnostics } = await import("@/server/openclaw-diagnostics.server");
     return runFilesystemDiagnostics();
   },
 );

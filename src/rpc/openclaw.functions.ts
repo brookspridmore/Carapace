@@ -1,7 +1,19 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { TaskStatus, Snapshot } from "@/lib/mock-data";
-import type { AgentAliasInput } from "./adapters/types";
 import type { WriteLayer } from "@/lib/memory-store";
+
+// Client-safe shape mirror of src/server/adapters/types.ts → AgentAliasInput.
+// Duplicated here so this file has zero references into src/server/*.
+type AgentAliasInput = {
+  rawOpenClawId: string;
+  friendlyName: string;
+  role?: string;
+  parentRawOpenClawId?: string;
+  workspacePath?: string;
+  memoryPath?: string;
+  notes?: string;
+  tags?: string[];
+};
 
 // IMPORTANT: This file is imported by client code (routes, components, hooks)
 // to obtain the RPC stubs. The TanStack server-fn transformer strips handler
@@ -13,8 +25,8 @@ import type { WriteLayer } from "@/lib/memory-store";
 // Always dynamic-import inside the handler.
 
 async function loadCore() {
-  const mod = await import("./openclaw.server");
-  const fs = await import("./adapters/filesystem.server");
+  const mod = await import("@/server/openclaw.server");
+  const fs = await import("@/server/adapters/filesystem.server");
   return { ...mod, getOpenClawRootPath: fs.getOpenClawRootPath };
 }
 
