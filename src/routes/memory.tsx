@@ -3,12 +3,14 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { MEMORY_ENTRIES, AGENTS } from "@/lib/mock-data";
-import { Search, History, Inbox, Check, X as XIcon, Sparkles } from "lucide-react";
+import { Search, History, Inbox, Check, X as XIcon, Sparkles, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMemoryStore, getSourceById, type MemorySearchHit, type WriteLayer } from "@/lib/memory-store";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
+import { EmptyState } from "@/components/shell/EmptyState";
 
 const ENTRY_TABS = ["all", "MEMORY.md", "DREAMS.md", "daily", "snapshot"] as const;
 const TOP_TABS = ["search", "browse", "traces", "queue"] as const;
@@ -37,6 +39,8 @@ export const Route = createFileRoute("/memory")({
 
 function MemoryPage() {
   const [topTab, setTopTab] = useState<TopTab>("search");
+  const status = useOpenClawStatus();
+  const isMock = status.mode === "mock";
   return (
     <AppShell title="Memory" subtitle="Markdown · FTS5 (Postgres FTS in preview) · snapshots">
       <PageHeader
@@ -51,6 +55,9 @@ function MemoryPage() {
           </OnboardingHint>
         }
       />
+      {!isMock ? (
+        <EmptyState icon={<Brain className="w-5 h-5 text-muted-foreground" />} message="No memory sources found." />
+      ) : (
       <div className="p-6 space-y-4">
         <div className="flex gap-1.5 border-b border-border">
           {TOP_TABS.map((t) => (
@@ -66,6 +73,7 @@ function MemoryPage() {
         {topTab === "traces" && <TracesTab />}
         {topTab === "queue" && <QueueTab />}
       </div>
+      )}
     </AppShell>
   );
 }
