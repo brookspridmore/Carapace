@@ -39,7 +39,10 @@ function SettingsPage() {
       />
       <div className="p-6 space-y-6 max-w-2xl">
         <Card title="OpenClaw connection">
-          <Field label="OPENCLAW_BASE_URL" defaultValue="http://127.0.0.1:18789" />
+          <Field label="OPENCLAW_ROOT_PATH (primary)" defaultValue="~/.openclaw" />
+          <div className="mt-3">
+            <Field label="OPENCLAW_BASE_URL (legacy gateway, optional)" defaultValue="" />
+          </div>
           <div className="mt-3">
             <Field label="OPENCLAW_API_KEY (optional)" defaultValue="" />
           </div>
@@ -54,8 +57,10 @@ function SettingsPage() {
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground mt-3">
-            Carapace proxies every OpenClaw call server-side. The browser never connects to OpenClaw directly.
-            <span className="text-mono"> OPENCLAW_GATEWAY_URL</span> is accepted as an alias.
+            OpenClaw is a local runtime + filesystem + gateway protocol — not a REST service.
+            Carapace reads agents, memory, sessions and logs directly from
+            <span className="text-mono"> OPENCLAW_ROOT_PATH</span>. The legacy
+            HTTP gateway is only used when no root path is configured.
           </p>
         </Card>
 
