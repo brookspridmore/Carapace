@@ -11,6 +11,8 @@ import { cn } from "@/lib/utils";
 import { useTaskStore } from "@/lib/task-store";
 import { useSnapshotStore, useFilteredSnapshots, type SnapshotStatus } from "@/lib/snapshot-store";
 import { useMemoryStore } from "@/lib/memory-store";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
+import { EmptyState } from "@/components/shell/EmptyState";
 
 export const Route = createFileRoute("/snapshots")({
   head: () => ({
@@ -38,6 +40,8 @@ function SnapshotsPage() {
   const filtered = useFilteredSnapshots();
   const [openId, setOpenId] = useState<string | null>(null);
   const open = useSnapshotStore((s) => s.snapshots.find((x) => x.id === openId)) ?? null;
+  const ocStatus = useOpenClawStatus();
+  const isMock = ocStatus.mode === "mock";
 
   function resume(snap: Snapshot) {
     setFocusedSnapshot(snap.id);
@@ -77,6 +81,9 @@ function SnapshotsPage() {
           </OnboardingHint>
         }
       />
+      {!isMock ? (
+        <EmptyState icon={<Camera className="w-5 h-5 text-muted-foreground" />} message="No snapshots found." />
+      ) : (
       <div className="p-6 space-y-4">
         {/* Filter bar */}
         <div className="panel border border-border rounded-lg p-3 flex items-center gap-2 flex-wrap">
@@ -225,6 +232,7 @@ function SnapshotsPage() {
           />
         )}
       </div>
+      )}
     </AppShell>
   );
 }

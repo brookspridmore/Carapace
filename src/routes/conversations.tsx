@@ -5,9 +5,11 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { CONVERSATIONS, AGENTS, type ConversationThread } from "@/lib/mock-data";
 import { useAgentLabelMap } from "@/lib/agent-registry";
-import { Send, Terminal, Globe, MonitorSmartphone } from "lucide-react";
+import { Send, Terminal, Globe, MonitorSmartphone, MessagesSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
+import { EmptyState } from "@/components/shell/EmptyState";
 
 const CHANNEL_ICON = { telegram: Send, ui: MonitorSmartphone, terminal: Terminal, api: Globe } as const;
 
@@ -24,11 +26,14 @@ export const Route = createFileRoute("/conversations")({
 });
 
 function ConversationsPage() {
-  const [active, setActive] = useState<ConversationThread>(CONVERSATIONS[0]);
+  const status = useOpenClawStatus();
+  const isMock = status.mode === "mock";
+  const source = isMock ? CONVERSATIONS : [];
+  const [active, setActive] = useState<ConversationThread | null>(source[0] ?? null);
   const [filter, setFilter] = useState<string>("all");
   const labelMap = useAgentLabelMap();
   const nameOf = (id?: string) => (id ? labelMap[id] ?? AGENTS.find((a) => a.id === id)?.name ?? id : "—");
-  const filtered = filter === "all" ? CONVERSATIONS : CONVERSATIONS.filter((c) => c.channels.includes(filter as any));
+  const filtered = filter === "all" ? source : source.filter((c) => c.channels.includes(filter as any));
   return (
     <AppShell title="Conversations" subtitle="Unified inbox · merged across channels">
       <PageHeader
@@ -42,6 +47,9 @@ function ConversationsPage() {
           </OnboardingHint>
         }
       />
+      {source.length === 0 ? (
+        <EmptyState icon={<MessagesSquare className="w-5 h-5 text-muted-foreground" />} message="No conversations found." />
+      ) : (
       <div className="grid grid-cols-[320px_1fr] h-[calc(100vh-3.5rem-104px)]">
         <aside className="panel border-r border-border overflow-y-auto">
           <div className="p-2 flex gap-1 border-b border-border">
@@ -58,7 +66,7 @@ function ConversationsPage() {
           </div>
           <ul>
             {filtered.map((c) => {
-              const isActive = c.id === active.id;
+              const isActive = c.id === active?.id;
               return (
                 <li key={c.id}>
                   <button
@@ -84,6 +92,7 @@ function ConversationsPage() {
             })}
           </ul>
         </aside>
+        {active && (
         <section className="flex flex-col min-h-0">
           <div className="px-5 py-3 border-b border-border">
             <div className="text-sm font-semibold">{active.title}</div>
@@ -112,7 +121,9 @@ function ConversationsPage() {
             />
           </div>
         </section>
+        )}
       </div>
+      )}
     </AppShell>
   );
 }

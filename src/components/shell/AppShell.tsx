@@ -6,6 +6,7 @@ import {
   PanelLeftClose, PanelLeftOpen, Hexagon, BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
 
 const NAV: { to: string; label: string; icon: typeof Activity; group: "primary" | "modules" | "system" }[] = [
   { to: "/", label: "Flow", icon: Activity, group: "primary" },
@@ -147,17 +148,34 @@ function ApprovalsBadge() {
 }
 
 function OpenClawIndicator() {
-  // Simulated — green dot pointing at default OPENCLAW_BASE_URL.
+  const status = useOpenClawStatus();
+  const { label, dotClass, tone } = (() => {
+    switch (status.connection) {
+      case "mock":
+        return { label: "Mock Mode", dotClass: "bg-yellow", tone: "border-yellow/40 text-yellow" };
+      case "connected":
+        return { label: "Connected to OpenClaw", dotClass: "bg-sky", tone: "border-sky/40 text-sky" };
+      case "no-data":
+        return { label: "No OpenClaw data found", dotClass: "bg-muted-foreground", tone: "border-border text-muted-foreground" };
+      case "unreachable":
+      default:
+        return { label: "OpenClaw unreachable", dotClass: "bg-coral", tone: "border-coral/50 text-coral" };
+    }
+  })();
+  const title = `${label} · ${status.mode.toUpperCase()} · ${status.baseUrl || "no base url"}`;
   return (
-    <div
-      className="flex items-center gap-2 px-2 py-1 rounded-md surface border border-border text-xs"
-      title="OpenClaw 127.0.0.1:18789 — connected (mock)"
+    <Link
+      to="/settings"
+      className={cn("flex items-center gap-2 px-2 py-1 rounded-md surface border text-xs hover:bg-surface", tone)}
+      title={title}
     >
       <span className="relative flex h-2 w-2">
-        <span className="absolute inline-flex h-full w-full rounded-full bg-sky opacity-60 animate-ping" />
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-sky" />
+        {status.connection === "connected" && (
+          <span className="absolute inline-flex h-full w-full rounded-full bg-sky opacity-60 animate-ping" />
+        )}
+        <span className={cn("relative inline-flex rounded-full h-2 w-2", dotClass)} />
       </span>
-      <span className="text-mono text-muted-foreground hidden sm:inline">openclaw</span>
-    </div>
+      <span className="text-mono hidden sm:inline">{label}</span>
+    </Link>
   );
 }

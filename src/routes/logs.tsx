@@ -6,6 +6,9 @@ import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { LOGS, AGENTS } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { useAgentLabelMap } from "@/lib/agent-registry";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
+import { EmptyState } from "@/components/shell/EmptyState";
+import { ScrollText } from "lucide-react";
 
 const LEVEL_COLOR = { debug: "text-muted-foreground", info: "text-foreground", warn: "text-yellow", error: "text-coral" } as const;
 
@@ -25,7 +28,10 @@ function LogsPage() {
   const [level, setLevel] = useState<string>("all");
   const [agent, setAgent] = useState<string>("all");
   const labelMap = useAgentLabelMap();
-  const filtered = LOGS.filter((l) => (level === "all" || l.level === level) && (agent === "all" || l.agentId === agent));
+  const status = useOpenClawStatus();
+  const isMock = status.mode === "mock";
+  const source = isMock ? LOGS : [];
+  const filtered = source.filter((l) => (level === "all" || l.level === level) && (agent === "all" || l.agentId === agent));
   return (
     <AppShell title="Logs" subtitle="Live stream · filtered · audit-ready">
       <PageHeader
@@ -39,6 +45,8 @@ function LogsPage() {
         }
       />
       <div className="p-6 space-y-4">
+        {isMock ? (
+        <>
         <div className="flex items-center gap-2">
           <select value={level} onChange={(e) => setLevel(e.target.value)} className="surface border border-border rounded-md px-2 py-1 text-xs">
             <option value="all">All levels</option>
@@ -65,6 +73,10 @@ function LogsPage() {
             ))}
           </div>
         </div>
+        </>
+        ) : (
+          <EmptyState icon={<ScrollText className="w-5 h-5 text-muted-foreground" />} message="No logs found." />
+        )}
       </div>
     </AppShell>
   );

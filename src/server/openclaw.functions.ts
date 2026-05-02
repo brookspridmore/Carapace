@@ -1,5 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getAdapter, getOpenClawBaseUrl } from "./openclaw.server";
+import {
+  getAdapter,
+  getOpenClawBaseUrl,
+  getOpenClawMode,
+  getLastFetch,
+} from "./openclaw.server";
 import type { TaskStatus, Snapshot } from "@/lib/mock-data";
 import type { AgentAliasInput } from "./adapters/types";
 import type { WriteLayer } from "@/lib/memory-store";
@@ -9,6 +14,43 @@ export const ocHealth = createServerFn({ method: "GET" }).handler(async () => {
   const base = getOpenClawBaseUrl();
   const h = await adapter.health();
   return { ...h, configuredBaseUrl: base };
+});
+
+// Lightweight status endpoint for the AppShell indicator + Settings debug
+// panel. Never throws — even if OpenClaw is unreachable.
+export const ocStatus = createServerFn({ method: "GET" }).handler(async () => {
+  const mode = getOpenClawMode();
+  const baseUrl = getOpenClawBaseUrl();
+  const apiKeyConfigured = Boolean(process.env.OPENCLAW_API_KEY);
+  let connection: "mock" | "connected" | "unreachable" | "no-data" = "mock";
+  let lastError: string | null = null;
+
+  if (mode === "mock") {
+    connection = "mock";
+  } else {
+    try {
+      const h = await getAdapter().health();
+      if (!h.ok) {
+        connection = "unreachable";
+      } else {
+        // Probe agents to distinguish connected-but-empty from connected.
+        const agents = await getAdapter().listAgents();
+        connection = agents.length > 0 ? "connected" : "no-data";
+      }
+    } catch (err) {
+      connection = "unreachable";
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+  }
+
+  return {
+    mode,
+    baseUrl,
+    apiKeyConfigured,
+    connection,
+    lastError,
+    lastFetch: getLastFetch(),
+  };
 });
 
 export const ocListAgents = createServerFn({ method: "GET" }).handler(async () => {
