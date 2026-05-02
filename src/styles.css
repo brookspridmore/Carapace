@@ -138,3 +138,22 @@
 
 /* Force dark theme globally — Carapace is operator UI */
 html { color-scheme: dark; }
+
+/* React Flow node default chrome — Carapace nodes carry their own panel
+   styling, so strip the library's default white background, border, padding,
+   and shadow that would otherwise sit offset behind our custom nodes. */
+.react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  width: auto !important;
+}
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+  box-shadow: none !important;
+  outline: none !important;
+}
