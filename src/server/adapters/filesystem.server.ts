@@ -275,35 +275,25 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
     async listMemorySources() {
       const infos = await readAgentDirs(root);
       const sources: Awaited<ReturnType<OpenClawAdapter["listMemorySources"]>> = [];
-      // Global memory files at the root.
-      for (const fname of ["MEMORY.md", "DREAMS.md"]) {
-        const fp = path.join(root, fname);
+      const push = async (id: string, fp: string, kind: "memory_md" | "dreams_md", agentId?: string) => {
         const st = await safeStat(fp);
-        if (st) {
-          sources.push({
-            id: `root:${fname}`,
-            label: fname,
-            path: fp,
-            sizeKb: Math.round(st.size / 1024),
-            kind: "markdown",
-          } as never);
-        }
-      }
-      // Per-agent memory files.
+        if (!st) return;
+        const body = (await safeRead(fp)) ?? "";
+        sources.push({
+          id,
+          kind,
+          agentId: agentId as AgentId | undefined,
+          path: fp,
+          title: path.basename(fp),
+          body: body.slice(0, 4096),
+          updatedAt: st.mtime.toISOString(),
+        });
+      };
+      await push("root:MEMORY.md", path.join(root, "MEMORY.md"), "memory_md");
+      await push("root:DREAMS.md", path.join(root, "DREAMS.md"), "dreams_md");
       for (const info of infos) {
-        for (const fname of ["MEMORY.md", "DREAMS.md"]) {
-          const fp = path.join(info.dir, fname);
-          const st = await safeStat(fp);
-          if (st) {
-            sources.push({
-              id: `${info.rawId}:${fname}`,
-              label: `${info.rawId}/${fname}`,
-              path: fp,
-              sizeKb: Math.round(st.size / 1024),
-              kind: "markdown",
-            } as never);
-          }
-        }
+        await push(`${info.rawId}:MEMORY.md`, path.join(info.dir, "MEMORY.md"), "memory_md", info.rawId);
+        await push(`${info.rawId}:DREAMS.md`, path.join(info.dir, "DREAMS.md"), "dreams_md", info.rawId);
       }
       return sources;
     },
