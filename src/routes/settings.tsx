@@ -2,8 +2,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
-import { Copy } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
 import { useAgentRegistry } from "@/lib/agent-registry";
+import { useOpenClawStatus, refreshOpenClawStatus } from "@/lib/openclaw-status";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -38,12 +40,26 @@ function SettingsPage() {
       <div className="p-6 space-y-6 max-w-2xl">
         <Card title="OpenClaw connection">
           <Field label="OPENCLAW_BASE_URL" defaultValue="http://127.0.0.1:18789" />
-          <p className="text-[11px] text-muted-foreground mt-2">
+          <div className="mt-3">
+            <Field label="OPENCLAW_API_KEY (optional)" defaultValue="" />
+          </div>
+          <div className="mt-3">
+            <div className="text-[11px] text-mono text-muted-foreground mb-1">OPENCLAW_MODE</div>
+            <div className="text-[11px] text-muted-foreground">
+              Set on the server (env var). One of:
+              <span className="text-mono text-foreground"> mock</span> ·
+              <span className="text-mono text-foreground"> readonly</span> ·
+              <span className="text-mono text-foreground"> live</span>.
+              In <span className="text-mono">readonly</span> Carapace never falls back to mock data — empty states are shown when OpenClaw is unreachable.
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-3">
             Carapace proxies every OpenClaw call server-side. The browser never connects to OpenClaw directly.
-            <br />
-            <span className="text-mono">OPENCLAW_GATEWAY_URL</span> is accepted as an alias.
+            <span className="text-mono"> OPENCLAW_GATEWAY_URL</span> is accepted as an alias.
           </p>
         </Card>
+
+        <OpenClawDebugPanel />
 
         <Card title="OpenClaw config bridge">
           <label className="block mb-3">
@@ -81,6 +97,65 @@ function SettingsPage() {
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+function OpenClawDebugPanel() {
+  const s = useOpenClawStatus(8000);
+  const f = s.lastFetch;
+  const tone =
+    s.connection === "connected" ? "text-sky" :
+    s.connection === "no-data" ? "text-muted-foreground" :
+    s.connection === "mock" ? "text-yellow" :
+    "text-coral";
+  return (
+    <section className="panel border border-border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10px] uppercase tracking-wider text-mono text-muted-foreground">OpenClaw Debug</div>
+        <button
+          onClick={() => refreshOpenClawStatus()}
+          className="flex items-center gap-1 text-[11px] text-mono text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className="w-3 h-3" /> refresh
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-3 text-[11px] text-mono">
+        <DebugRow label="mode" value={s.mode} />
+        <DebugRow label="connection" value={<span className={tone}>{s.connection}</span>} />
+        <DebugRow label="base url" value={s.baseUrl || "—"} />
+        <DebugRow label="api key" value={s.apiKeyConfigured ? "configured" : "unset"} />
+        <DebugRow label="last url" value={f.url ?? "—"} />
+        <DebugRow label="last status" value={f.status === null ? "—" : String(f.status)} />
+        <DebugRow label="last latency" value={f.latencyMs === null ? "—" : `${f.latencyMs}ms`} />
+        <DebugRow label="last fetch" value={f.finishedAt ?? "—"} />
+      </div>
+      {(s.lastError || f.error) && (
+        <div className="mt-3 surface border border-coral/40 rounded-md p-2">
+          <div className="text-[10px] text-mono uppercase text-coral mb-1">last error</div>
+          <div className="text-[11px] text-mono text-foreground/85 break-all">{s.lastError ?? f.error}</div>
+        </div>
+      )}
+      {f.rawPreview && (
+        <div className="mt-3">
+          <div className="text-[10px] text-mono uppercase text-muted-foreground mb-1">raw response (first 512 chars)</div>
+          <pre className={cn("surface border border-border rounded-md p-2 text-[11px] text-mono whitespace-pre-wrap break-all max-h-48 overflow-auto")}>
+            {f.rawPreview}
+          </pre>
+        </div>
+      )}
+      <p className="text-[11px] text-muted-foreground mt-3">
+        Readonly mode never writes, executes, or mutates OpenClaw. All write methods on the adapter throw.
+      </p>
+    </section>
+  );
+}
+
+function DebugRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-[10px] uppercase text-muted-foreground">{label}</span>
+      <span className="text-foreground break-all">{value}</span>
+    </div>
   );
 }
 
