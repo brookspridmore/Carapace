@@ -2,10 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, FolderSearch, FileText, Database, ScrollText, Settings as SettingsIcon, Folder, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAgentRegistry } from "@/lib/agent-registry";
 import { useOpenClawStatus, refreshOpenClawStatus } from "@/lib/openclaw-status";
 import { cn } from "@/lib/utils";
+import { useEffect, useState } from "react";
+import { ocFilesystemDiagnostics, type FsDiagnosticsReport, type FsItem, type FsItemKind } from "@/server/openclaw-diagnostics.functions";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -65,6 +67,8 @@ function SettingsPage() {
         </Card>
 
         <OpenClawDebugPanel />
+
+        <FilesystemDiagnosticsPanel />
 
         <Card title="OpenClaw config bridge">
           <label className="block mb-3">
