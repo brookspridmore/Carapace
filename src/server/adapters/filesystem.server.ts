@@ -340,7 +340,10 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
     async listMemorySources() {
       const infos = await readAgentDirs(root);
       const sources: Awaited<ReturnType<OpenClawAdapter["listMemorySources"]>> = [];
+      const seen = new Set<string>();
       const push = async (id: string, fp: string, kind: "memory_md" | "dreams_md", agentId?: string) => {
+        if (seen.has(fp)) return;
+        seen.add(fp);
         const st = await safeStat(fp);
         if (!st) return;
         const body = (await safeRead(fp)) ?? "";
@@ -354,11 +357,37 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
           updatedAt: st.mtime.toISOString(),
         });
       };
+
+      // Recursively scan a directory (bounded depth) for *.md files. Used for
+      // global memory and workspace folders.
+      const scanDir = async (dir: string, agentId: string | undefined, depth: number) => {
+        if (depth < 0) return;
+        const names = await safeReaddir(dir);
+        for (const name of names) {
+          const fp = path.join(dir, name);
+          const st = await safeStat(fp);
+          if (!st) continue;
+          if (st.isDirectory()) {
+            if (name === "node_modules" || name === ".git" || name === "sessions" || name === "logs") continue;
+            await scanDir(fp, agentId, depth - 1);
+            continue;
+          }
+          const lower = name.toLowerCase();
+          if (!lower.endsWith(".md")) continue;
+          const kind: "memory_md" | "dreams_md" = lower.includes("dream") ? "dreams_md" : "memory_md";
+          await push(`${agentId ?? "root"}:${fp}`, fp, kind, agentId);
+        }
+      };
+
       await push("root:MEMORY.md", path.join(root, "MEMORY.md"), "memory_md");
       await push("root:DREAMS.md", path.join(root, "DREAMS.md"), "dreams_md");
+      await scanDir(path.join(root, "memory"), undefined, 3);
+      await scanDir(path.join(root, "workspace"), undefined, 3);
+
       for (const info of infos) {
         await push(`${info.rawId}:MEMORY.md`, path.join(info.dir, "MEMORY.md"), "memory_md", info.rawId);
         await push(`${info.rawId}:DREAMS.md`, path.join(info.dir, "DREAMS.md"), "dreams_md", info.rawId);
+        await scanDir(info.dir, info.rawId, 3);
       }
       return sources;
     },
