@@ -7,7 +7,7 @@ import { useAgentRegistry } from "@/lib/agent-registry";
 import { useOpenClawStatus, refreshOpenClawStatus } from "@/lib/openclaw-status";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { ocFilesystemDiagnostics, type FsDiagnosticsReport, type FsItem, type FsItemKind } from "@/server/openclaw-diagnostics.functions";
+import { ocFilesystemDiagnostics, type FsDiagnosticsReport, type FsItem, type FsItemKind } from "@/lib/openclaw-client";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
