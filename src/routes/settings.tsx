@@ -302,6 +302,9 @@ function FsReportView({ report, showRaw, setShowRaw }: { report: FsDiagnosticsRe
       {report.errors.length > 0 && report.exists && report.readable && report.agents.length > 0 && report.memory.length > 0 && (
         <EmptyBanner kind="warn" title="Scan completed with notes" body={report.errors.join(" · ")} />
       )}
+      {report.warnings && report.warnings.length > 0 && (
+        <EmptyBanner kind="warn" title="Warnings" body={report.warnings.join(" · ")} />
+      )}
 
       <ItemSection title="Agents" icon={<Folder className="w-3 h-3" />} items={report.agents} kind="agent" />
       <ItemSection title="Memory files" icon={<Database className="w-3 h-3" />} items={report.memory} kind="memory" />

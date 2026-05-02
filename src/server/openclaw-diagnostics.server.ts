@@ -42,7 +42,6 @@ async function listDir(p: string): Promise<string[]> {
 const AGENT_SUB_CONFIG_NAMES = ["models.json", "auth-profiles.json", "auth-state.json"];
 // Legacy single-file configs at the agent root (optional).
 const LEGACY_CONFIG_NAMES = ["agent.json", "agent.toml", "config.json", "config.toml"];
-const MEMORY_FILE_NAMES = new Set(["memory.md", "dreams.md"]);
 const LOG_EXT = [".log", ".jsonl"];
 const SESSION_HINTS = ["sessions", "conversations"];
 const SESSION_FILE_NAMES = new Set(["sessions.json"]);
