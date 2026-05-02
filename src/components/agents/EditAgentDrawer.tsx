@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Save, ChevronDown, ChevronRight, ShieldAlert, FileCheck2, Hash, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAgentRegistry, type AgentAlias, type AliasSource } from "@/lib/agent-registry";
-import { ocBackupOpenClawConfig, ocValidateOpenClawConfig, ocWriteOpenClawConfig } from "@/server/openclaw.functions";
+import { ocBackupOpenClawConfig, ocValidateOpenClawConfig, ocWriteOpenClawConfig } from "@/lib/openclaw-client";
 import { useServerFn } from "@tanstack/react-start";
 
 const SOURCE_TONE: Record<AliasSource, string> = {

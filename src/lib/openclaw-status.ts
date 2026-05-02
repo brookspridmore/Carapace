@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ocStatus } from "@/server/openclaw.functions";
+import { getOpenClawStatus } from "@/lib/openclaw-client";
 
 export type OpenClawConnection = "mock" | "connected" | "unreachable" | "no-data";
 export type OpenClawMode = "mock" | "readonly" | "live";
@@ -43,7 +43,7 @@ async function fetchStatus(): Promise<OpenClawStatus> {
   if (inflight) return inflight;
   inflight = (async () => {
     try {
-      const s = (await ocStatus()) as OpenClawStatus;
+      const s = (await getOpenClawStatus()) as OpenClawStatus;
       cached = s;
       subscribers.forEach((fn) => fn(s));
       return s;
