@@ -66,7 +66,7 @@ function ConversationsPage() {
           </div>
           <ul>
             {filtered.map((c) => {
-              const isActive = c.id === active.id;
+              const isActive = c.id === active?.id;
               return (
                 <li key={c.id}>
                   <button
