@@ -5,8 +5,10 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { APPROVALS, AGENTS, type ApprovalRequest } from "@/lib/mock-data";
 import { useAgentLabelMap } from "@/lib/agent-registry";
-import { Check, X, Terminal, FileText, Settings, Brain } from "lucide-react";
+import { Check, X, Terminal, FileText, Settings, Brain, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOpenClawStatus } from "@/lib/openclaw-status";
+import { EmptyState } from "@/components/shell/EmptyState";
 
 const TYPE_ICON = { command: Terminal, file_edit: FileText, config_change: Settings, memory_write: Brain } as const;
 
@@ -23,7 +25,9 @@ export const Route = createFileRoute("/approvals")({
 });
 
 function ApprovalsPage() {
-  const [items, setItems] = useState<ApprovalRequest[]>(APPROVALS);
+  const status = useOpenClawStatus();
+  const isMock = status.mode === "mock";
+  const [items, setItems] = useState<ApprovalRequest[]>(isMock ? APPROVALS : []);
   const labelMap = useAgentLabelMap();
   function decide(id: string, decision: "approve" | "deny") {
     setItems((prev) => prev.map((a) => a.id === id ? { ...a, status: decision === "approve" ? "approved" : "denied" } : a));
