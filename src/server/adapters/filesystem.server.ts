@@ -123,13 +123,58 @@ async function readAgentDirs(root: string): Promise<AgentDirInfo[]> {
     const dir = path.join(agentsDir, name);
     const st = await safeStat(dir);
     if (!st || !st.isDirectory()) continue;
-    // Try common config filenames.
-    let configRaw: string | null = null;
+    // Real OpenClaw layout:
+    //   agents/<id>/agent/models.json
+    //   agents/<id>/agent/auth-profiles.json
+    //   agents/<id>/agent/auth-state.json
+    //   agents/<id>/sessions/sessions.json
+    //   agents/<id>/sessions/*.jsonl
+    // Legacy/optional:
+    //   agents/<id>/agent.json|config.json|agent.toml|config.toml
+    //   agents/<id>/MEMORY.md
+    //
+    // No config file is required. An agent is simply any directory under
+    // OPENCLAW_ROOT_PATH/agents/*. Missing config files are NOT errors.
+    const config: Record<string, string> = {};
+
+    // Optional legacy single-file configs at the agent root.
     for (const fname of ["agent.json", "config.json", "agent.toml", "config.toml"]) {
-      configRaw = await safeRead(path.join(dir, fname));
-      if (configRaw) break;
+      const raw = await safeRead(path.join(dir, fname));
+      if (raw) {
+        Object.assign(config, parseAgentConfig(raw));
+        break;
+      }
     }
-    const config = configRaw ? parseAgentConfig(configRaw) : {};
+
+    // Real OpenClaw `agent/` subfolder.
+    const agentSub = path.join(dir, "agent");
+    const modelsRaw = await safeRead(path.join(agentSub, "models.json"));
+    if (modelsRaw) {
+      try {
+        const parsed = JSON.parse(modelsRaw);
+        const first = Array.isArray(parsed)
+          ? parsed[0]
+          : Array.isArray(parsed?.models)
+            ? parsed.models[0]
+            : parsed?.default ?? parsed;
+        if (first && typeof first === "object") {
+          if (typeof first.model === "string") config.model = first.model;
+          if (typeof first.id === "string" && !config.model) config.model = first.id;
+          if (typeof first.provider === "string") config.provider = first.provider;
+        }
+      } catch { /* ignore */ }
+    }
+    const authRaw = await safeRead(path.join(agentSub, "auth-profiles.json"));
+    if (authRaw) {
+      try {
+        const parsed = JSON.parse(authRaw);
+        const profile = Array.isArray(parsed) ? parsed[0] : parsed?.default ?? parsed;
+        if (profile && typeof profile === "object" && typeof profile.provider === "string" && !config.provider) {
+          config.provider = profile.provider;
+        }
+      } catch { /* ignore */ }
+    }
+
     const memStat = await safeStat(path.join(dir, "MEMORY.md"));
     out.push({
       rawId: name,
@@ -226,22 +271,42 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
       const out: LogEntry[] = [];
       const infos = await readAgentDirs(root);
       for (const info of infos) {
-        const logsDir = path.join(info.dir, "logs");
-        const files = (await safeReaddir(logsDir)).filter((f) => f.endsWith(".log") || f.endsWith(".jsonl"));
-        // Sort newest-first by name (timestamps in filename), best-effort.
-        files.sort().reverse();
-        for (const f of files.slice(0, 3)) {
-          const raw = await safeRead(path.join(logsDir, f));
-          if (!raw) continue;
-          const lines = raw.split(/\r?\n/).filter(Boolean).slice(-Math.ceil(limit / Math.max(infos.length, 1)));
-          for (const line of lines) {
-            out.push({
-              id: `${info.rawId}:${f}:${out.length}`,
-              ts: new Date().toISOString(),
-              level: "info",
-              agentId: info.rawId as unknown as AgentId,
-              message: line.slice(0, 500),
-            } as LogEntry);
+        // Real OpenClaw stores activity under sessions/*.jsonl. Also check
+        // a legacy logs/ dir if present.
+        const candidateDirs = [path.join(info.dir, "sessions"), path.join(info.dir, "logs")];
+        for (const logsDir of candidateDirs) {
+          const files = (await safeReaddir(logsDir)).filter(
+            (f) => f.endsWith(".log") || f.endsWith(".jsonl"),
+          );
+          files.sort().reverse();
+          for (const f of files.slice(0, 3)) {
+            const raw = await safeRead(path.join(logsDir, f));
+            if (!raw) continue;
+            const lines = raw
+              .split(/\r?\n/)
+              .filter(Boolean)
+              .slice(-Math.ceil(limit / Math.max(infos.length, 1)));
+            for (const line of lines) {
+              let message = line.slice(0, 500);
+              let ts = new Date().toISOString();
+              if (line.startsWith("{")) {
+                try {
+                  const obj = JSON.parse(line);
+                  if (typeof obj.message === "string") message = obj.message.slice(0, 500);
+                  else if (typeof obj.content === "string") message = obj.content.slice(0, 500);
+                  else if (typeof obj.text === "string") message = obj.text.slice(0, 500);
+                  if (typeof obj.timestamp === "string") ts = obj.timestamp;
+                  else if (typeof obj.ts === "string") ts = obj.ts;
+                } catch { /* keep raw line */ }
+              }
+              out.push({
+                id: `${info.rawId}:${f}:${out.length}`,
+                ts,
+                level: "info",
+                agentId: info.rawId as unknown as AgentId,
+                message,
+              } as LogEntry);
+            }
           }
         }
       }
@@ -275,7 +340,10 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
     async listMemorySources() {
       const infos = await readAgentDirs(root);
       const sources: Awaited<ReturnType<OpenClawAdapter["listMemorySources"]>> = [];
+      const seen = new Set<string>();
       const push = async (id: string, fp: string, kind: "memory_md" | "dreams_md", agentId?: string) => {
+        if (seen.has(fp)) return;
+        seen.add(fp);
         const st = await safeStat(fp);
         if (!st) return;
         const body = (await safeRead(fp)) ?? "";
@@ -289,11 +357,37 @@ export function createFilesystemAdapter(root: string): OpenClawAdapter {
           updatedAt: st.mtime.toISOString(),
         });
       };
+
+      // Recursively scan a directory (bounded depth) for *.md files. Used for
+      // global memory and workspace folders.
+      const scanDir = async (dir: string, agentId: string | undefined, depth: number) => {
+        if (depth < 0) return;
+        const names = await safeReaddir(dir);
+        for (const name of names) {
+          const fp = path.join(dir, name);
+          const st = await safeStat(fp);
+          if (!st) continue;
+          if (st.isDirectory()) {
+            if (name === "node_modules" || name === ".git" || name === "sessions" || name === "logs") continue;
+            await scanDir(fp, agentId, depth - 1);
+            continue;
+          }
+          const lower = name.toLowerCase();
+          if (!lower.endsWith(".md")) continue;
+          const kind: "memory_md" | "dreams_md" = lower.includes("dream") ? "dreams_md" : "memory_md";
+          await push(`${agentId ?? "root"}:${fp}`, fp, kind, agentId);
+        }
+      };
+
       await push("root:MEMORY.md", path.join(root, "MEMORY.md"), "memory_md");
       await push("root:DREAMS.md", path.join(root, "DREAMS.md"), "dreams_md");
+      await scanDir(path.join(root, "memory"), undefined, 3);
+      await scanDir(path.join(root, "workspace"), undefined, 3);
+
       for (const info of infos) {
         await push(`${info.rawId}:MEMORY.md`, path.join(info.dir, "MEMORY.md"), "memory_md", info.rawId);
         await push(`${info.rawId}:DREAMS.md`, path.join(info.dir, "DREAMS.md"), "dreams_md", info.rawId);
+        await scanDir(info.dir, info.rawId, 3);
       }
       return sources;
     },

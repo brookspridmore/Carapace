@@ -20,6 +20,7 @@ export interface FsDiagnosticsReport {
   scannedAt: string;
   durationMs: number;
   errors: string[];
+  warnings: string[];
   subdirectories: string[];
   agents: FsItem[];
   memory: FsItem[];
