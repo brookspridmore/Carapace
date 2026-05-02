@@ -34,7 +34,7 @@ export interface FsDiagnosticsReport {
   logs: FsItem[];
   configs: FsItem[];
   suggestions: { path: string; exists: boolean }[];
-  raw: Record<string, NonNullable<unknown>>;
+  raw: string;
 }
 
 function expandHome(p: string): string {
@@ -170,7 +170,7 @@ export const ocFilesystemDiagnostics = createServerFn({ method: "GET" }).handler
       scannedAt: new Date().toISOString(), durationMs: Date.now() - t0,
       errors: ["OPENCLAW_ROOT_PATH is not set"],
       subdirectories: [], agents: [], memory: [], sessions: [], logs: [], configs: [],
-      suggestions, raw: { rootPath: null },
+      suggestions, raw: JSON.stringify({ rootPath: null }, null, 2),
     };
   }
 
@@ -181,7 +181,7 @@ export const ocFilesystemDiagnostics = createServerFn({ method: "GET" }).handler
       scannedAt: new Date().toISOString(), durationMs: Date.now() - t0,
       errors: [`Root path not found: ${rootPath}`],
       subdirectories: [], agents: [], memory: [], sessions: [], logs: [], configs: [],
-      suggestions, raw: { rootPath },
+      suggestions, raw: JSON.stringify({ rootPath }, null, 2),
     };
   }
 
@@ -217,13 +217,13 @@ export const ocFilesystemDiagnostics = createServerFn({ method: "GET" }).handler
     logs: collected.logs,
     configs: collected.configs,
     suggestions,
-    raw: {
+    raw: JSON.stringify({
       rootPath, topLevel, counts: {
         agents: collected.agents.length, memory: collected.memory.length,
         sessions: collected.sessions.length, logs: collected.logs.length,
         configs: collected.configs.length,
       },
-    },
+    }, null, 2),
   };
   return report;
 });
