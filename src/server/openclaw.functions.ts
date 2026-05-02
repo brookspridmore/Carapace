@@ -5,6 +5,7 @@ import {
   getOpenClawMode,
   getLastFetch,
 } from "./openclaw.server";
+import { getOpenClawRootPath } from "./adapters/filesystem.server";
 import type { TaskStatus, Snapshot } from "@/lib/mock-data";
 import type { AgentAliasInput } from "./adapters/types";
 import type { WriteLayer } from "@/lib/memory-store";
@@ -20,7 +21,8 @@ export const ocHealth = createServerFn({ method: "GET" }).handler(async () => {
 // panel. Never throws — even if OpenClaw is unreachable.
 export const ocStatus = createServerFn({ method: "GET" }).handler(async () => {
   const mode = getOpenClawMode();
-  const baseUrl = getOpenClawBaseUrl();
+  const root = getOpenClawRootPath();
+  const baseUrl = root ? `file://${root}` : getOpenClawBaseUrl();
   const apiKeyConfigured = Boolean(process.env.OPENCLAW_API_KEY);
   let connection: "mock" | "connected" | "unreachable" | "no-data" = "mock";
   let lastError: string | null = null;
@@ -46,6 +48,7 @@ export const ocStatus = createServerFn({ method: "GET" }).handler(async () => {
   return {
     mode,
     baseUrl,
+    rootPath: root,
     apiKeyConfigured,
     connection,
     lastError,
