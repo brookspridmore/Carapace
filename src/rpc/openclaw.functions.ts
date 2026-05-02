@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { TaskStatus, Snapshot } from "@/lib/mock-data";
-import type { AgentAliasInput } from "./adapters/types";
+import type { AgentAliasInput } from "@/server/adapters/types";
 import type { WriteLayer } from "@/lib/memory-store";
 
 // IMPORTANT: This file is imported by client code (routes, components, hooks)
@@ -13,8 +13,8 @@ import type { WriteLayer } from "@/lib/memory-store";
 // Always dynamic-import inside the handler.
 
 async function loadCore() {
-  const mod = await import("./openclaw.server");
-  const fs = await import("./adapters/filesystem.server");
+  const mod = await import("@/server/openclaw.server");
+  const fs = await import("@/server/adapters/filesystem.server");
   return { ...mod, getOpenClawRootPath: fs.getOpenClawRootPath };
 }
 
