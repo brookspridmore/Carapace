@@ -164,4 +164,101 @@ export const mockAdapter: OpenClawAdapter = {
     useMemoryStore.getState().decide(id, decision, overrideText);
     return useMemoryStore.getState().candidates.find((c) => c.id === id) ?? null;
   },
+
+  // ── New gateway methods — mock stubs ──────────────────────────────────────
+
+  async getGatewayHealth() { return { ok: true, uptime: 0, version: "mock" }; },
+  async getGatewayStatus() { return { agentCount: AGENTS.length, activeSessions: 0, pendingApprovals: 0, cronJobs: 0 }; },
+  async getSystemPresence() { return { connected: true, clientCount: 1, gatewayVersion: "mock" }; },
+
+  async listGwSessions() { return []; },
+  async getGwSession() { return null; },
+  async previewSession() { return null; },
+  async describeSession() { return null; },
+  async createSession() { throw new Error("mock: createSession not supported"); },
+  async sendToSession() {},
+  async steerSession() {},
+  async abortSession() {},
+  async patchSession() { return null; },
+  async resetSession() {},
+  async deleteSession() {},
+  async compactSession() {},
+  async getChatHistory() { return { messages: [] }; },
+  async sendChat() {},
+  async abortChat() {},
+  async injectChat() {},
+
+  async listGwAgents() { return []; },
+  async getGwAgent() { return null; },
+  async getAgentIdentity() { return null; },
+  async createGwAgent() { throw new Error("mock: createGwAgent not supported"); },
+  async updateGwAgent() { return null; },
+  async deleteGwAgent() {},
+  async listAgentFiles() { return []; },
+  async getAgentFile() { return null; },
+  async setAgentFile() {},
+
+  async getConfig() { return {}; },
+  async getConfigSchema() { return {}; },
+  async lookupConfigSchema() { return null; },
+  async patchConfig() { return { ok: true, changed: [] }; },
+  async applyConfig() { return { ok: true }; },
+  async backupConfig() { return { path: "mock-backup", createdAt: new Date().toISOString(), size: 0 }; },
+  async validateConfig() { return { ok: true, errors: [], warnings: [] }; },
+  async writeConfig() {
+    return {
+      ok: true,
+      bytesWritten: 0,
+      backup: { path: "mock-backup", createdAt: new Date().toISOString(), size: 0 },
+      audit: { id: crypto.randomUUID(), ts: new Date().toISOString(), summary: "mock write" },
+    };
+  },
+  async getUpdateStatus() { return { available: false }; },
+  async runUpdate() {},
+
+  async listExecApprovals() { return APPROVALS.map((a) => ({
+    id: a.id, agentId: a.agentId, tool: a.type, input: {}, status: a.status, requestedAt: a.requestedAt ?? new Date().toISOString(),
+  })); },
+  async getExecApproval() { return null; },
+  async resolveExecApproval(id, decision) {
+    const a = APPROVALS.find((x) => x.id === id);
+    if (!a) return null;
+    return { id, agentId: a.agentId, tool: a.type, input: {}, status: decision === "approve" ? "approved" : "denied", requestedAt: a.requestedAt ?? new Date().toISOString() };
+  },
+  async getApprovalPolicy() { return {}; },
+  async setApprovalPolicy() {},
+  async listPluginApprovals() { return []; },
+  async resolvePluginApproval() { return null; },
+
+  async getCronStatus() { return { running: 0, scheduled: 0, failed: 0 }; },
+  async listCronJobs() { return []; },
+  async addCronJob() { throw new Error("mock: addCronJob not supported"); },
+  async updateCronJob() { return null; },
+  async removeCronJob() {},
+  async runCronJob() {},
+  async getCronRuns() { return []; },
+  async wake() {},
+
+  async listNodes() { return []; },
+  async describeNode() { return null; },
+  async renameNode() {},
+  async invokeNode() { return null; },
+  async drainNodeQueue() {},
+  async pullNodePending() { return []; },
+  async ackNodePending() {},
+  async enqueueNodePending() {},
+
+  async listGwModels() { return []; },
+  async getUsageStatus() { return { dailyCost: 0, monthlyCost: 0, currency: "USD" }; },
+  async getUsageCost() { return { totalCost: 0, currency: "USD", breakdown: {} }; },
+  async getChannelsStatus() { return []; },
+  async getTtsStatus() { return { enabled: false }; },
+  async listTtsProviders() { return []; },
+  async setTtsProvider() {},
+  async getTalkConfig() { return {}; },
+  async setTalkMode() {},
+
+  async getToolsCatalog() { return []; },
+  async getEffectiveTools() { return []; },
+  async invokeTool() { return { output: null }; },
 };

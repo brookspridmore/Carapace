@@ -1,4 +1,5 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { useGatewayStream } from "@/lib/gateway-stream";
 
 import appCss from "../styles.css?url";
 
@@ -70,5 +71,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  // Mount the SSE stream once at the app root — all routes consume the store.
+  useGatewayStream();
   return <Outlet />;
 }

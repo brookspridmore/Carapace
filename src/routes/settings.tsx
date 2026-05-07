@@ -2,12 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
-import { Copy, RefreshCw, FolderSearch, FileText, Database, ScrollText, Settings as SettingsIcon, Folder, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Copy, RefreshCw, FolderSearch, FileText, Database, ScrollText, Settings as SettingsIcon, Folder, AlertCircle, CheckCircle2, Save, RotateCcw, ShieldCheck, Power } from "lucide-react";
 import { useAgentRegistry } from "@/lib/agent-registry";
 import { useOpenClawStatus, refreshOpenClawStatus } from "@/lib/openclaw-status";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { ocFilesystemDiagnostics, type FsDiagnosticsReport, type FsItem, type FsItemKind } from "@/lib/openclaw-client";
+import { ocGetConfig, ocGetConfigSchema, ocValidateConfig, ocWriteConfig, ocBackupConfig, ocApplyConfig } from "@/lib/openclaw-client";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -101,11 +104,152 @@ function SettingsPage() {
           <CopyBlock value="tailscale serve --bg http://127.0.0.1:3080" />
         </Card>
 
+        <GatewayConfigEditor />
+
         <Card title="Theme">
           <p className="text-sm text-muted-foreground">Dark operator theme. Light theme is intentionally disabled — Carapace is built for low-light cockpit use.</p>
         </Card>
       </div>
     </AppShell>
+  );
+}
+
+// ── Gateway config editor ────────────────────────────────────────────────────
+
+function GatewayConfigEditor() {
+  const status = useOpenClawStatus();
+  const isGateway = status.mode === "gateway";
+  const [draft, setDraft] = useState<string>("");
+  const [validation, setValidation] = useState<{ ok: boolean; errors: string[] } | null>(null);
+
+  const { data: liveConfig, refetch: refetchConfig } = useQuery({
+    queryKey: ["gateway-config"],
+    queryFn: () => ocGetConfig(),
+    enabled: isGateway,
+    staleTime: 30_000,
+  });
+
+  // Populate draft when config loads for the first time
+  useEffect(() => {
+    if (liveConfig && !draft) {
+      setDraft(JSON.stringify(liveConfig, null, 2));
+    }
+  }, [liveConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const backupMut = useMutation({
+    mutationFn: () => ocBackupConfig(),
+    onSuccess: (ref) => toast.success(`Config backed up to ${ref.path}`),
+    onError: (e) => toast.error(String(e)),
+  });
+
+  const validateMut = useMutation({
+    mutationFn: () => ocValidateConfig({ payload: draft }),
+    onSuccess: (v) => {
+      setValidation(v);
+      if (v.ok) toast.success("Config valid");
+      else toast.error(`Invalid: ${v.errors.join(", ")}`);
+    },
+    onError: (e) => toast.error(String(e)),
+  });
+
+  const writeMut = useMutation({
+    mutationFn: () => ocWriteConfig({ payload: draft, operatorNote: "Carapace config editor" }),
+    onSuccess: () => {
+      toast.success("Config written and applied");
+      void refetchConfig();
+    },
+    onError: (e) => toast.error(String(e)),
+  });
+
+  const restartMut = useMutation({
+    mutationFn: () => ocApplyConfig(),
+    onSuccess: (r) => toast.success(r.message ?? "Gateway restarted"),
+    onError: (e) => toast.error(String(e)),
+  });
+
+  if (!isGateway) return null;
+
+  return (
+    <section className="panel border border-border rounded-lg p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <SettingsIcon className="w-4 h-4 text-yellow" /> Gateway config editor
+        </h3>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => backupMut.mutate()}
+            disabled={backupMut.isPending}
+            className="text-xs px-2.5 py-1 rounded-md surface border border-border hover:border-yellow/60 flex items-center gap-1"
+          >
+            <ShieldCheck className="w-3 h-3" /> Backup
+          </button>
+          <button
+            onClick={() => {
+              if (liveConfig) setDraft(JSON.stringify(liveConfig, null, 2));
+              setValidation(null);
+            }}
+            className="text-xs px-2.5 py-1 rounded-md surface border border-border hover:border-yellow/60 flex items-center gap-1"
+          >
+            <RotateCcw className="w-3 h-3" /> Reset
+          </button>
+          <button
+            onClick={() => restartMut.mutate()}
+            disabled={restartMut.isPending}
+            className="text-xs px-2.5 py-1 rounded-md bg-coral/15 border border-coral/40 text-coral flex items-center gap-1 hover:bg-coral/25"
+          >
+            <Power className="w-3 h-3" /> Restart gateway
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Edit the live OpenClaw config. Carapace always creates a timestamped backup before writing.
+        Use <span className="text-mono text-foreground">Validate</span> first, then <span className="text-mono text-foreground">Save & apply</span>.
+      </p>
+
+      <textarea
+        value={draft}
+        onChange={(e) => { setDraft(e.target.value); setValidation(null); }}
+        rows={18}
+        className="w-full font-mono text-xs surface border border-border rounded-md px-3 py-2 focus:outline-none focus:border-yellow/60 resize-none"
+        spellCheck={false}
+      />
+
+      {validation && (
+        <div className={cn(
+          "text-xs rounded-md px-3 py-2 flex items-start gap-2",
+          validation.ok ? "bg-sky/10 border border-sky/30 text-sky" : "bg-coral/10 border border-coral/30 text-coral",
+        )}>
+          {validation.ok
+            ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            : <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+          <span>{validation.ok ? "Config is valid." : validation.errors.join(" · ")}</span>
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => validateMut.mutate()}
+          disabled={validateMut.isPending || !draft}
+          className="text-xs px-3 py-1.5 rounded-md surface border border-border hover:border-yellow/60 flex items-center gap-1.5 disabled:opacity-50"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" /> Validate
+        </button>
+        <button
+          onClick={() => {
+            if (!validation?.ok) {
+              toast.error("Validate first before saving.");
+              return;
+            }
+            writeMut.mutate();
+          }}
+          disabled={writeMut.isPending || !draft}
+          className="text-xs px-3 py-1.5 rounded-md bg-yellow text-black flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50"
+        >
+          <Save className="w-3.5 h-3.5" /> Save & apply
+        </button>
+      </div>
+    </section>
   );
 }
 

@@ -1,16 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "@/components/shell/AppShell";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { MEMORY_ENTRIES, AGENTS } from "@/lib/mock-data";
-import { Search, History, Inbox, Check, X as XIcon, Sparkles, Brain } from "lucide-react";
+import { MEMORY_ENTRIES } from "@/lib/mock-data";
+import { Search, History, Inbox, Check, X as XIcon, Sparkles, Brain, FileText, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { useMemoryStore, getSourceById, type MemorySearchHit, type WriteLayer } from "@/lib/memory-store";
 import { useAgentLabelMap } from "@/lib/agent-registry";
 import { OnboardingHint } from "@/components/shell/OnboardingHint";
 import { useOpenClawStatus } from "@/lib/openclaw-status";
-import { EmptyState } from "@/components/shell/EmptyState";
+import { useGatewayStore } from "@/lib/gateway-store";
+import { ocListAgentFiles, ocGetAgentFile, ocSetAgentFile } from "@/lib/openclaw-client";
+import { toast } from "sonner";
 
 const ENTRY_TABS = ["all", "MEMORY.md", "DREAMS.md", "daily", "snapshot"] as const;
 const TOP_TABS = ["search", "browse", "traces", "queue"] as const;
@@ -41,6 +44,8 @@ function MemoryPage() {
   const [topTab, setTopTab] = useState<TopTab>("search");
   const status = useOpenClawStatus();
   const isMock = status.mode === "mock";
+  const isGateway = status.mode === "gateway";
+
   return (
     <AppShell title="Memory" subtitle="Markdown · FTS5 (Postgres FTS in preview) · snapshots">
       <PageHeader
@@ -55,8 +60,8 @@ function MemoryPage() {
           </OnboardingHint>
         }
       />
-      {!isMock ? (
-        <EmptyState icon={<Brain className="w-5 h-5 text-muted-foreground" />} message="No memory sources found." />
+      {isGateway ? (
+        <GatewayMemoryView />
       ) : (
       <div className="p-6 space-y-4">
         <div className="flex gap-1.5 border-b border-border">
@@ -68,13 +73,140 @@ function MemoryPage() {
             </button>
           ))}
         </div>
-        {topTab === "search" && <SearchTab />}
-        {topTab === "browse" && <BrowseTab />}
+        {isMock && topTab === "search" && <SearchTab />}
+        {isMock && topTab === "browse" && <BrowseTab />}
         {topTab === "traces" && <TracesTab />}
         {topTab === "queue" && <QueueTab />}
       </div>
       )}
     </AppShell>
+  );
+}
+
+// ── Gateway memory view (live agent files) ─────────────────────────────────
+
+function GatewayMemoryView() {
+  const agents = useGatewayStore((s) => s.agents);
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const qc = useQueryClient();
+
+  const { data: files = [], isLoading: loadingFiles } = useQuery({
+    queryKey: ["memory-agent-files", selectedAgentId],
+    queryFn: () => selectedAgentId ? ocListAgentFiles({ agentId: selectedAgentId }) : Promise.resolve([]),
+    enabled: !!selectedAgentId,
+  });
+
+  const { data: fileContent, isLoading: loadingFile } = useQuery({
+    queryKey: ["memory-file", selectedAgentId, selectedPath],
+    queryFn: () => selectedAgentId && selectedPath
+      ? ocGetAgentFile({ agentId: selectedAgentId, path: selectedPath })
+      : null,
+    enabled: !!selectedAgentId && !!selectedPath,
+  });
+
+  const saveMut = useMutation({
+    mutationFn: () => {
+      if (!selectedAgentId || !selectedPath) throw new Error("Nothing selected");
+      return ocSetAgentFile({ agentId: selectedAgentId, path: selectedPath, content: draft });
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["memory-file", selectedAgentId, selectedPath] });
+      toast.success("File saved");
+    },
+    onError: (e) => toast.error(String(e)),
+  });
+
+  const contentStr = fileContent?.content ?? "";
+
+  return (
+    <div className="p-6 space-y-4">
+      <div className="text-xs text-muted-foreground">
+        Select an agent to browse and edit its memory files (MEMORY.md, DREAMS.md, system prompt, soul).
+      </div>
+
+      <div className="flex gap-3 flex-wrap">
+        {agents.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => { setSelectedAgentId(a.id); setSelectedPath(null); setDraft(""); }}
+            className={cn(
+              "text-xs px-3 py-1.5 rounded-md border",
+              selectedAgentId === a.id
+                ? "bg-yellow/20 border-yellow/60 text-yellow"
+                : "surface border-border text-muted-foreground hover:border-yellow/40",
+            )}
+          >
+            {a.name ?? a.id}
+          </button>
+        ))}
+        {agents.length === 0 && (
+          <div className="text-xs text-muted-foreground">No agents available. Agents appear once the gateway connects.</div>
+        )}
+      </div>
+
+      {selectedAgentId && (
+        <div className="panel border border-border rounded-xl overflow-hidden flex h-[60vh]">
+          {/* File list */}
+          <aside className="w-52 border-r border-border overflow-y-auto p-2 shrink-0">
+            {loadingFiles ? (
+              <div className="text-xs text-muted-foreground p-2">Loading…</div>
+            ) : files.length === 0 ? (
+              <div className="text-xs text-muted-foreground p-2">No files found.</div>
+            ) : files.map((f) => (
+              <button
+                key={f.path}
+                onClick={() => { setSelectedPath(f.path); setDraft(""); }}
+                className={cn(
+                  "w-full text-left px-2 py-1.5 rounded text-xs font-mono hover:bg-surface flex items-center gap-1.5 truncate",
+                  selectedPath === f.path && "bg-yellow/15 text-yellow",
+                )}
+              >
+                <FileText className="w-3 h-3 shrink-0" />
+                <span className="truncate">{f.path}</span>
+              </button>
+            ))}
+          </aside>
+
+          {/* Editor */}
+          <div className="flex-1 flex flex-col min-w-0">
+            {!selectedPath ? (
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
+                <Brain className="w-4 h-4 mr-2" /> Select a file to view or edit
+              </div>
+            ) : loadingFile ? (
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">Loading…</div>
+            ) : (
+              <>
+                <div className="px-4 py-2 border-b border-border text-xs text-mono text-muted-foreground">{selectedPath}</div>
+                <textarea
+                  value={draft || contentStr}
+                  onChange={(e) => setDraft(e.target.value)}
+                  className="flex-1 font-mono text-xs bg-transparent p-4 focus:outline-none resize-none"
+                  spellCheck={false}
+                />
+                <div className="px-4 py-2.5 border-t border-border flex gap-2">
+                  <button
+                    onClick={() => saveMut.mutate()}
+                    disabled={saveMut.isPending}
+                    className="text-xs px-3 py-1.5 rounded bg-yellow text-black flex items-center gap-1.5 hover:opacity-90 disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Save
+                  </button>
+                  <button
+                    onClick={() => setDraft(contentStr)}
+                    className="text-xs px-2 py-1.5 rounded surface border border-border hover:border-yellow/60"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -351,7 +483,3 @@ function QueueTab() {
   );
 }
 
-// Wrapping JSX from prior return
-/* eslint-disable @typescript-eslint/no-unused-vars */
-function _unused() { return AGENTS; }
-/* eslint-enable @typescript-eslint/no-unused-vars */
