@@ -13,15 +13,12 @@
 
 import { EventEmitter } from "node:events";
 import type {
-  ConnectChallenge,
-  ConnectFrame,
   HelloOk,
   HelloError,
   RpcRequest,
   RpcResponse,
   GatewayEvent,
   GatewayConnectionState,
-  IncomingFrame,
   GwAgent,
   GwSession,
   GwExecApproval,
@@ -62,6 +59,7 @@ export class GatewayClient extends EventEmitter {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSubscriptions = new Set<string>();
+  private connectRpcId: string | null = null;
 
   // Cached warm state (rehydrated on every connect)
   cachedAgents: GwAgent[] = [];
@@ -153,51 +151,120 @@ export class GatewayClient extends EventEmitter {
   // ── Message dispatch ─────────────────────────────────────────────────────────
 
   private handleMessage(raw: string): void {
-    let frame: IncomingFrame;
+    let frame: Record<string, unknown>;
     try {
-      frame = JSON.parse(raw) as IncomingFrame;
+      frame = JSON.parse(raw) as Record<string, unknown>;
     } catch {
       console.warn("[carapace:gw] unparseable frame:", String(raw).slice(0, 200));
       return; // ignore unparseable frames
     }
 
-    // Handshake frames
-    if ((frame as ConnectChallenge).type === "connect.challenge") {
-      console.log("[carapace:gw] received connect.challenge — sending connect frame");
-      this.handleChallenge(frame as ConnectChallenge);
+    // Real OpenClaw protocol wraps server→client pushes as:
+    //   { type: "event", event: "<name>", payload: {...} }
+    if (frame.type === "event" && typeof frame.event === "string") {
+      const eventName = frame.event;
+      const payload = (frame.payload ?? {}) as Record<string, unknown>;
+
+      if (eventName === "connect.challenge") {
+        console.log("[carapace:gw] received connect.challenge — sending connect RPC");
+        this.handleChallenge(payload);
+        return;
+      }
+
+      // Translate to legacy GatewayEvent shape so downstream handlers (cache,
+      // SSE bus) keep working unchanged.
+      this.handleEvent({
+        type: eventName,
+        data: payload,
+        sessionKey: typeof frame.sessionKey === "string" ? frame.sessionKey : undefined,
+        agentId: typeof frame.agentId === "string" ? frame.agentId : undefined,
+        ts: typeof frame.ts === "string" ? frame.ts : undefined,
+      } as GatewayEvent);
       return;
     }
-    if ((frame as HelloOk).type === "hello-ok") {
-      console.log("[carapace:gw] received hello-ok — connection ready");
-      this.handleHelloOk(frame as HelloOk);
+
+    // Legacy handshake frames (kept for compatibility / older gateways)
+    if (frame.type === "connect.challenge") {
+      console.log("[carapace:gw] received legacy connect.challenge — sending connect RPC");
+      this.handleChallenge(frame as Record<string, unknown>);
       return;
     }
-    if ((frame as HelloError).type === "hello-error") {
-      this.handleHelloError(frame as HelloError);
+    if (frame.type === "hello-ok") {
+      console.log("[carapace:gw] received legacy hello-ok — connection ready");
+      this.handleHelloOk(frame as unknown as HelloOk);
+      return;
+    }
+    if (frame.type === "hello-error") {
+      this.handleHelloError(frame as unknown as HelloError);
       return;
     }
 
     // RPC response (has an id)
-    if ("id" in frame && typeof (frame as RpcResponse).id === "string") {
-      this.handleRpcResponse(frame as RpcResponse);
+    if ("id" in frame && typeof frame.id === "string") {
+      this.handleRpcResponse(frame as unknown as RpcResponse);
       return;
     }
 
-    // Push event (no id, has type)
-    if ("type" in frame) {
-      this.handleEvent(frame as GatewayEvent);
+    // Unrecognised — log during handshake to help diagnose protocol drift.
+    if (this.state !== "ready") {
+      console.warn("[carapace:gw] unrecognised frame during handshake:", String(raw).slice(0, 300));
     }
   }
 
-  private handleChallenge(frame: ConnectChallenge): void {
-    const connect: ConnectFrame = {
-      type: "connect",
+  private handleChallenge(payload: Record<string, unknown>): void {
+    // Send the connect handshake as a regular RPC request. The server replies
+    // with an RPC response (handled by handleRpcResponse via connectRpcId).
+    const id = String(++this.reqCounter);
+    this.connectRpcId = id;
+
+    const params: Record<string, unknown> = {
       token: this.token,
-      ...(frame.nonce ? { nonce: frame.nonce } : {}),
       clientId: "carapace",
       capabilities: ["god-mode", "admin"],
     };
-    this.send(connect);
+    if (typeof payload.nonce === "string") params.nonce = payload.nonce;
+
+    const timeout = setTimeout(() => {
+      if (this.connectRpcId === id) this.connectRpcId = null;
+      this.pending.delete(id);
+      console.error("[carapace:gw] connect RPC timed out");
+      this.handleHelloError({
+        type: "hello-error",
+        code: "timeout",
+        message: "connect RPC timed out",
+      });
+    }, DEFAULT_TIMEOUT_MS);
+
+    this.pending.set(id, {
+      resolve: (result) => {
+        if (this.connectRpcId === id) this.connectRpcId = null;
+        const r = (result ?? {}) as Record<string, unknown>;
+        const features = (r.features ?? {}) as { methods?: string[]; events?: string[] };
+        this.handleHelloOk({
+          type: "hello-ok",
+          connectionId: typeof r.connectionId === "string" ? r.connectionId : "",
+          protocolVersion: typeof r.protocolVersion === "string" ? r.protocolVersion : "",
+          features: {
+            methods: features.methods ?? [],
+            events: features.events ?? [],
+          },
+          snapshot: r.snapshot as Record<string, unknown> | undefined,
+        });
+      },
+      reject: (err) => {
+        if (this.connectRpcId === id) this.connectRpcId = null;
+        console.error("[carapace:gw] connect RPC rejected:", err.message);
+        this.handleHelloError({
+          type: "hello-error",
+          code: "rpc-error",
+          message: err.message,
+        });
+      },
+      timeout,
+      method: "connect",
+    });
+
+    this.send({ id, method: "connect", params });
   }
 
   private handleHelloOk(frame: HelloOk): void {
