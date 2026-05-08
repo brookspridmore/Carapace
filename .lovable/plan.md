@@ -6,7 +6,7 @@ The product name is **Carapace** everywhere — code, UI, metadata, env vars, de
 
 ## Hosting reality
 
-Lovable preview runs on TanStack Start at the edge — it cannot literally bind to `127.0.0.1:3080` or run as systemd. The Carapace UI runs in preview; VPS deployment files are generated as repo artifacts you run yourself.
+Lovable preview runs on TanStack Start at the edge — it cannot literally bind to `127.0.0.1:8080` or run as systemd. The Carapace UI runs in preview; VPS deployment files are generated as repo artifacts you run yourself.
 
 ## Design system
 
@@ -83,10 +83,10 @@ The data layer is documented for swap to SQLite/FTS5 on the VPS.
 
 Generated under `deploy/` and project root:
 - `deploy/install.sh` — install deps, run migrations, start service, print Tailscale command
-- `deploy/carapace.service` — systemd unit, binds `127.0.0.1:3080`
+- `deploy/carapace.service` — systemd unit, binds `127.0.0.1:8080`
 - `.env.example` — `OPENCLAW_BASE_URL=http://127.0.0.1:18789` (with `OPENCLAW_GATEWAY_URL` documented as alias), DB URL, secrets
 - `INSTALL.md` — install/run on VPS
-- `DEPLOYMENT_TAILSCALE.md` — `tailscale serve --bg http://127.0.0.1:3080` and ACL guidance
+- `DEPLOYMENT_TAILSCALE.md` — `tailscale serve --bg http://127.0.0.1:8080` and ACL guidance
 - `SECURITY.md` — localhost binding, approvals, audit logs
 - `deploy/README.md` — overview pointing to the above
 

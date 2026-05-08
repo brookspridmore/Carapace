@@ -5,7 +5,7 @@ Carapace is designed to **never** listen on a public interface. The default `HOS
 ## One-liner
 
 ```bash
-tailscale serve --bg http://127.0.0.1:3080
+tailscale serve --https=8080 http://127.0.0.1:8080
 ```
 
 This makes Carapace reachable at `https://<machine-name>.<tailnet>.ts.net` for any device on your tailnet, with automatic TLS.
@@ -35,7 +35,7 @@ tailscale up --advertise-tags=tag:carapace
 tailscale serve reset
 ```
 
-## Why not expose port 3080 directly?
+## Why not expose port 8080 directly?
 
 - Carapace gates risky agent actions behind operator approval. Public exposure invites brute-force on the approval queue.
 - OpenClaw on `127.0.0.1:18789` is also localhost-only by design. Carapace inherits the same trust boundary.
@@ -46,8 +46,8 @@ tailscale serve reset
 On the VPS, confirm Carapace is loopback-only:
 
 ```bash
-ss -tlnp | grep 3080
-# Expect: 127.0.0.1:3080 (NOT 0.0.0.0:3080)
+ss -tlnp | grep 8080
+# Expect: 127.0.0.1:8080 (NOT 0.0.0.0:8080)
 ```
 
 If you see `0.0.0.0`, fix `HOST=127.0.0.1` in `.env` and restart.

@@ -8,9 +8,9 @@ Carapace is an **operator control system** for autonomous agents. Its security p
 
 ## Network
 
-- Binds to `127.0.0.1:3080` only. Never `0.0.0.0`.
+- Binds to `127.0.0.1:8080` only. Never `0.0.0.0`.
 - Exposed via Tailscale Serve (see [DEPLOYMENT_TAILSCALE.md](./DEPLOYMENT_TAILSCALE.md)).
-- VPS firewall should drop all inbound traffic on `:3080` and `:18789`.
+- VPS firewall should drop all inbound traffic on `:8080` and `:18789`.
 - All OpenClaw calls are server-side; the browser never talks to OpenClaw directly.
 
 ## Approval gate
@@ -43,7 +43,7 @@ Stored in the local SQLite DB (`/var/lib/carapace/carapace.db`) and rotated to `
 ## Hardening checklist
 
 - [ ] `HOST=127.0.0.1` in `.env`
-- [ ] `ss -tlnp | grep 3080` shows loopback only
+- [ ] `ss -tlnp | grep 8080` shows loopback only
 - [ ] Tailscale ACLs restrict access to operators
 - [ ] `.env` is mode `0600`, owner `carapace`
 - [ ] `SESSION_SECRET` rotated from default

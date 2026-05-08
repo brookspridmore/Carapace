@@ -99,9 +99,9 @@ function SettingsPage() {
 
         <Card title="Tailscale exposure">
           <p className="text-sm text-foreground/85 mb-3">
-            Carapace binds to <span className="text-mono text-yellow">127.0.0.1:3080</span> on your VPS. Expose it to your tailnet with:
+            Carapace binds to <span className="text-mono text-yellow">127.0.0.1:8080</span> on your VPS. Expose it to your tailnet with:
           </p>
-          <CopyBlock value="tailscale serve --bg http://127.0.0.1:3080" />
+          <CopyBlock value="tailscale serve --https=8080 http://127.0.0.1:8080" />
         </Card>
 
         <GatewayConfigEditor />
