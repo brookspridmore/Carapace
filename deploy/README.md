@@ -5,7 +5,7 @@ Reference scaffolding for installing Carapace on a VPS alongside OpenClaw.
 | File | Purpose |
 |---|---|
 | `install.sh` | Copy app, install deps, write `.env`, install + start systemd unit |
-| `carapace.service` | systemd unit binding to `127.0.0.1:3080` |
+| `carapace.service` | systemd unit binding to `127.0.0.1:8080` |
 
 See the project root for:
 
@@ -14,4 +14,4 @@ See the project root for:
 - [`SECURITY.md`](../SECURITY.md) — approval gate, audit log, hardening
 - [`.env.example`](../.env.example) — environment template
 
-These files are reference scaffolding; the Lovable preview environment cannot literally bind to port 3080 or run as systemd. Run them on your VPS.
+These files are reference scaffolding; the Lovable preview environment cannot literally bind to port 8080 or run as systemd. Run them on your VPS.

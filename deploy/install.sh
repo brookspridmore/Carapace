@@ -21,14 +21,18 @@ command -v npm >/dev/null || { echo "npm is required"; exit 1; }
 command -v sqlite3 >/dev/null || echo "warn: sqlite3 not found — install for FTS5 memory backend"
 
 mkdir -p "$CARAPACE_DIR"
-cp -r ./* "$CARAPACE_DIR"/
+# Use cp -a so dotfiles (.env.example etc.) are included in the copy.
+cp -a . "$CARAPACE_DIR"/
 cd "$CARAPACE_DIR"
 
-echo "==> Installing dependencies"
-npm install --omit=dev
+echo "==> Installing dependencies (including dev deps needed for build)"
+npm install
 
 echo "==> Building Carapace"
 npm run build
+
+echo "==> Pruning dev dependencies"
+npm prune --omit=dev
 
 if [ ! -f .env ]; then
   cp .env.example .env
