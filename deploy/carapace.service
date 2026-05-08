@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/opt/carapace
 EnvironmentFile=/opt/carapace/.env
 # Carapace MUST bind to localhost only — Tailscale Serve fronts external access.
-ExecStart=/usr/bin/node /opt/carapace/.output/server/index.mjs
+ExecStart=/usr/bin/node /opt/carapace/server-node.mjs
 Restart=on-failure
 RestartSec=3
 User=carapace

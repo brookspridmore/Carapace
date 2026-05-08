@@ -98,5 +98,5 @@ grep -i token ~/.openclaw/openclaw.json
 
 ```bash
 cd /opt/carapace
-node .output/server/index.mjs
+node server-node.mjs
 ```
