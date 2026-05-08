@@ -49,7 +49,7 @@ function SettingsPage() {
             <Field label="OPENCLAW_BASE_URL (legacy gateway, optional)" defaultValue="" />
           </div>
           <div className="mt-3">
-            <Field label="OPENCLAW_API_KEY (optional)" defaultValue="" />
+            <Field label="OPENCLAW_GATEWAY_TOKEN (optional)" defaultValue="" />
           </div>
           <div className="mt-3">
             <div className="text-[11px] text-mono text-muted-foreground mb-1">OPENCLAW_MODE</div>
@@ -276,7 +276,7 @@ function OpenClawDebugPanel() {
         <DebugRow label="mode" value={s.mode} />
         <DebugRow label="connection" value={<span className={tone}>{s.connection}</span>} />
         <DebugRow label="base url" value={s.baseUrl || "—"} />
-        <DebugRow label="api key" value={s.apiKeyConfigured ? "configured" : "unset"} />
+        <DebugRow label="gateway token" value={s.gatewayTokenConfigured ? "configured" : "unset"} />
         <DebugRow label="last url" value={f.url ?? "—"} />
         <DebugRow label="last status" value={f.status === null ? "—" : String(f.status)} />
         <DebugRow label="last latency" value={f.latencyMs === null ? "—" : `${f.latencyMs}ms`} />

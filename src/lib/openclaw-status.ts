@@ -7,7 +7,7 @@ export type OpenClawMode = "mock" | "readonly" | "live";
 export interface OpenClawStatus {
   mode: OpenClawMode;
   baseUrl: string;
-  apiKeyConfigured: boolean;
+  gatewayTokenConfigured: boolean;
   connection: OpenClawConnection;
   lastError: string | null;
   lastFetch: {
@@ -25,7 +25,7 @@ export interface OpenClawStatus {
 const FALLBACK: OpenClawStatus = {
   mode: "mock",
   baseUrl: "",
-  apiKeyConfigured: false,
+  gatewayTokenConfigured: false,
   connection: "mock",
   lastError: null,
   lastFetch: {

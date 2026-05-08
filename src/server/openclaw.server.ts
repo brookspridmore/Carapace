@@ -14,7 +14,7 @@ import type { OpenClawAdapter } from "./adapters/types";
 //   OPENCLAW_BASE_URL      — OpenClaw gateway base URL (http or ws scheme).
 //                            Default: http://127.0.0.1:18789
 //   OPENCLAW_GATEWAY_URL   — Alias for OPENCLAW_BASE_URL.
-//   OPENCLAW_API_KEY       — Bearer token for gateway auth.
+//   OPENCLAW_GATEWAY_TOKEN       — Bearer token for gateway auth.
 //   OPENCLAW_ROOT_PATH     — Filesystem root (readonly supplemental reads).
 //
 // Mode selection priority:
@@ -39,8 +39,8 @@ export function getOpenClawBaseUrl(): string {
   return url && url.length > 0 ? url : DEFAULT_BASE_URL;
 }
 
-export function getOpenClawApiKey(): string | null {
-  const k = process.env.OPENCLAW_API_KEY;
+export function getOpenClawGatewayToken(): string | null {
+  const k = process.env.OPENCLAW_GATEWAY_TOKEN;
   return k && k.length > 0 ? k : null;
 }
 
@@ -60,7 +60,7 @@ export function getAdapter(): OpenClawAdapter {
       const root = getOpenClawRootPath();
       if (root) return createFilesystemAdapter(root);
       if (process.env.OPENCLAW_BASE_URL || process.env.OPENCLAW_GATEWAY_URL) {
-        return createOpenClawAdapter(getOpenClawBaseUrl(), getOpenClawApiKey());
+        return createOpenClawAdapter(getOpenClawBaseUrl(), getOpenClawGatewayToken());
       }
       return emptyAdapter;
     }

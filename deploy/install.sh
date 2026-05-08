@@ -6,7 +6,7 @@ set -euo pipefail
 CARAPACE_DIR="${CARAPACE_DIR:-/opt/carapace}"
 CARAPACE_PORT="${CARAPACE_PORT:-8080}"
 OPENCLAW_GATEWAY_URL="${OPENCLAW_GATEWAY_URL:-ws://127.0.0.1:18789}"
-OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}"
+OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 
 echo "==> Installing Carapace into $CARAPACE_DIR (port $CARAPACE_PORT)"
 echo "==> OpenClaw gateway expected at $OPENCLAW_GATEWAY_URL (Carapace will NOT modify OpenClaw)"
@@ -38,8 +38,8 @@ if [ ! -f .env ]; then
   cp .env.example .env
   sed -i "s|PORT=.*|PORT=${CARAPACE_PORT}|" .env
   sed -i "s|OPENCLAW_GATEWAY_URL=.*|OPENCLAW_GATEWAY_URL=${OPENCLAW_GATEWAY_URL}|" .env
-  if [ -n "$OPENCLAW_TOKEN" ]; then
-    sed -i "s|OPENCLAW_TOKEN=.*|OPENCLAW_TOKEN=${OPENCLAW_TOKEN}|" .env
+  if [ -n "$OPENCLAW_GATEWAY_TOKEN" ]; then
+    sed -i "s|OPENCLAW_GATEWAY_TOKEN=.*|OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}|" .env
   fi
 fi
 

@@ -31,7 +31,7 @@ nvm install 22 && nvm use 22
 ```bash
 # From the cloned repo directory:
 OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789 \
-OPENCLAW_TOKEN=<your-gateway-token> \
+OPENCLAW_GATEWAY_TOKEN=<your-openclaw-gateway-token> \
 ./deploy/install.sh
 ```
 
@@ -76,7 +76,7 @@ Edit `/opt/carapace/.env`. Key variables:
 | `HOST` | `127.0.0.1` | Must stay loopback — Tailscale handles exposure |
 | `OPENCLAW_MODE` | `gateway` | Set to `gateway` to connect via WebSocket |
 | `OPENCLAW_GATEWAY_URL` | `ws://127.0.0.1:18789` | OpenClaw WebSocket gateway address |
-| `OPENCLAW_TOKEN` | — | Gateway auth token (from your OpenClaw config) |
+| `OPENCLAW_GATEWAY_TOKEN` | — | Gateway auth token (from your OpenClaw config) |
 | `OPENCLAW_ROOT_PATH` | `~/.openclaw` | Optional: filesystem path for readonly fallback |
 | `DATABASE_URL` | `sqlite:///var/lib/carapace/carapace.db` | Local SQLite + FTS5 |
 | `SESSION_SECRET` | — | Generate with: `openssl rand -hex 32` |

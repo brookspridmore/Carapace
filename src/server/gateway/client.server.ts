@@ -443,7 +443,7 @@ let _autoConnectScheduled = false;
 export function getGatewayClient(): GatewayClient {
   if (!globalThis.__carapaceGatewayClient) {
     const url = process.env.OPENCLAW_GATEWAY_URL ?? process.env.OPENCLAW_BASE_URL ?? "ws://127.0.0.1:18789";
-    const token = process.env.OPENCLAW_API_KEY ?? "";
+    const token = process.env.OPENCLAW_GATEWAY_TOKEN ?? "";
     // Swap ws: → wss: if the base URL is already https.
     const wsUrl = url.replace(/^http/, "ws");
     const client = new GatewayClient(wsUrl, token);

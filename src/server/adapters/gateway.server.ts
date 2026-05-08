@@ -533,7 +533,7 @@ export const gatewayAdapter: OpenClawAdapter = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(process.env.OPENCLAW_API_KEY ? { Authorization: `Bearer ${process.env.OPENCLAW_API_KEY}` } : {}),
+        ...(process.env.OPENCLAW_GATEWAY_TOKEN ? { Authorization: `Bearer ${process.env.OPENCLAW_GATEWAY_TOKEN}` } : {}),
       },
       body: JSON.stringify({ tool, params }),
     });

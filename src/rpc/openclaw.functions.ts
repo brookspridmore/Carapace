@@ -40,7 +40,7 @@ export const ocStatus = createServerFn({ method: "GET" }).handler(async () => {
   const mode = getOpenClawMode();
   const root = getOpenClawRootPath();
   const baseUrl = root ? `file://${root}` : getOpenClawBaseUrl();
-  const apiKeyConfigured = Boolean(process.env.OPENCLAW_API_KEY);
+  const gatewayTokenConfigured = Boolean(process.env.OPENCLAW_GATEWAY_TOKEN);
   let connection: "mock" | "connected" | "unreachable" | "no-data" = "mock";
   let lastError: string | null = null;
   if (mode === "mock") {
@@ -54,7 +54,7 @@ export const ocStatus = createServerFn({ method: "GET" }).handler(async () => {
       lastError = err instanceof Error ? err.message : String(err);
     }
   }
-  return { mode, baseUrl, rootPath: root, apiKeyConfigured, connection, lastError, lastFetch: getLastFetch() };
+  return { mode, baseUrl, rootPath: root, gatewayTokenConfigured, connection, lastError, lastFetch: getLastFetch() };
 });
 
 export const ocGatewayHealth = createServerFn({ method: "GET" }).handler(async () => {
