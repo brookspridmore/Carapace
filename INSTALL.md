@@ -57,7 +57,7 @@ curl -fsS http://127.0.0.1:8080/ | head -n 20
 Run this once to add Carapace to your tailnet alongside OpenClaw:
 
 ```bash
-tailscale serve --https=8080 http://127.0.0.1:8080
+tailscale serve --bg --https=8080 http://127.0.0.1:8080
 ```
 
 Check both serve rules are active:

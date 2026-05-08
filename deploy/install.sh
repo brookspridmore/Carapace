@@ -61,7 +61,7 @@ Check status:
     journalctl -u carapace -f
 
 Expose it on your tailnet (keeps OpenClaw dashboard untouched at root):
-    tailscale serve --https=${CARAPACE_PORT} http://127.0.0.1:${CARAPACE_PORT}
+    tailscale serve --bg --https=${CARAPACE_PORT} http://127.0.0.1:${CARAPACE_PORT}
 
 Carapace will then be reachable at:
     https://<your-tailscale-hostname>.ts.net:${CARAPACE_PORT}

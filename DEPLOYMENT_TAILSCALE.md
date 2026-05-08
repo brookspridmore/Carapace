@@ -5,7 +5,7 @@ Carapace is designed to **never** listen on a public interface. The default `HOS
 ## One-liner
 
 ```bash
-tailscale serve --https=8080 http://127.0.0.1:8080
+tailscale serve --bg --https=8080 http://127.0.0.1:8080
 ```
 
 This makes Carapace reachable at `https://<machine-name>.<tailnet>.ts.net` for any device on your tailnet, with automatic TLS.
