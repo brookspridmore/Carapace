@@ -85,6 +85,13 @@ export class GatewayClient extends EventEmitter {
   ) {
     super();
     this.setMaxListeners(200);
+    // Prevent unhandled "error" events from crashing Node.
+    this.on("error", (err: Error) => {
+      console.error("[carapace:gw] client error:", err.message);
+    });
+    this.on("auth-error", (err: Error) => {
+      console.error("[carapace:gw] auth error:", err.message);
+    });
   }
 
   // ── State accessors ─────────────────────────────────────────────────────────
@@ -105,6 +112,7 @@ export class GatewayClient extends EventEmitter {
   }
 
   private openSocket(): void {
+    console.log(`[carapace:gw] connecting to ${this.wsUrl} (token: ${this.token ? "set" : "empty"})`);
     try {
       const ws = new WebSocket(this.wsUrl, {
         headers: { Authorization: `Bearer ${this.token}` },
@@ -112,24 +120,31 @@ export class GatewayClient extends EventEmitter {
       this.ws = ws;
 
       ws.onopen = () => {
-        // State transitions to authenticating; wait for challenge.
+        console.log("[carapace:gw] WebSocket open — waiting for server challenge");
         this.setState("authenticating");
       };
 
       ws.onmessage = (evt: MessageEvent) => {
+        // Log every raw frame during handshake so we can verify the protocol.
+        if (this.state !== "ready") {
+          console.log("[carapace:gw] frame (pre-ready):", String(evt.data).slice(0, 500));
+        }
         this.handleMessage(evt.data as string);
       };
 
       ws.onerror = (evt: Event) => {
         const msg = (evt as ErrorEvent).message ?? "WebSocket error";
+        console.error("[carapace:gw] WebSocket error:", msg);
         this.emit("error", new Error(msg));
         this.handleDisconnect();
       };
 
-      ws.onclose = () => {
+      ws.onclose = (evt: CloseEvent) => {
+        console.log(`[carapace:gw] WebSocket closed — code=${(evt as CloseEvent).code} reason=${(evt as CloseEvent).reason} state-was=${this.state}`);
         this.handleDisconnect();
       };
     } catch (err) {
+      console.error("[carapace:gw] failed to create WebSocket:", err);
       this.emit("error", err instanceof Error ? err : new Error(String(err)));
       this.handleDisconnect();
     }
@@ -142,15 +157,18 @@ export class GatewayClient extends EventEmitter {
     try {
       frame = JSON.parse(raw) as IncomingFrame;
     } catch {
+      console.warn("[carapace:gw] unparseable frame:", String(raw).slice(0, 200));
       return; // ignore unparseable frames
     }
 
     // Handshake frames
     if ((frame as ConnectChallenge).type === "connect.challenge") {
+      console.log("[carapace:gw] received connect.challenge — sending connect frame");
       this.handleChallenge(frame as ConnectChallenge);
       return;
     }
     if ((frame as HelloOk).type === "hello-ok") {
+      console.log("[carapace:gw] received hello-ok — connection ready");
       this.handleHelloOk(frame as HelloOk);
       return;
     }
@@ -188,6 +206,7 @@ export class GatewayClient extends EventEmitter {
     this.availableEvents = frame.features?.events ?? [];
     this.lastConnectedAt = new Date().toISOString();
     this.reconnectAttempt = 0;
+    console.log(`[carapace:gw] ready — connectionId=${frame.connectionId} methods=${this.availableMethods.length} events=${this.availableEvents.length}`);
     this.setState("ready");
     this.emit("ready", frame);
     // Warm state in the background; don't block callers.
@@ -195,6 +214,7 @@ export class GatewayClient extends EventEmitter {
   }
 
   private handleHelloError(frame: HelloError): void {
+    console.error(`[carapace:gw] hello-error: ${frame.code}: ${frame.message}`);
     this.emit("auth-error", new Error(`${frame.code}: ${frame.message}`));
     // Don't reconnect on auth failures — wrong token won't fix itself.
     this.setState("disconnected");
