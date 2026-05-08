@@ -124,9 +124,17 @@ function GatewayConfigEditor() {
 
   const { data: liveConfig, refetch: refetchConfig } = useQuery({
     queryKey: ["gateway-config"],
-    queryFn: () => ocGetConfig(),
+    queryFn: async () => {
+      try {
+        return await ocGetConfig();
+      } catch (e) {
+        console.error("[settings] failed to fetch gateway config:", e);
+        return null;
+      }
+    },
     enabled: isGateway,
     staleTime: 30_000,
+    retry: false,
   });
 
   // Populate draft when config loads for the first time
