@@ -58,7 +58,6 @@ export class GatewayClient extends EventEmitter {
   private reconnectAttempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSubscriptions = new Set<string>();
-  private connectRpcId: string | null = null;
 
   // Cached warm state (rehydrated on every connect)
   cachedAgents: GwAgent[] = [];
@@ -165,8 +164,33 @@ export class GatewayClient extends EventEmitter {
       const payload = (frame.payload ?? {}) as Record<string, unknown>;
 
       if (eventName === "connect.challenge") {
-        console.log("[carapace:gw] received connect.challenge — sending connect RPC");
+        console.log("[carapace:gw] received connect.challenge — sending connect event");
         this.handleChallenge(payload);
+        return;
+      }
+
+      // Auth success — server may use any of these event names.
+      if (eventName === "hello-ok" || eventName === "connect.ok" || eventName === "authenticated") {
+        console.log(`[carapace:gw] received ${eventName} — connection ready`);
+        const features = (payload.features ?? {}) as { methods?: string[]; events?: string[] };
+        this.handleHelloOk({
+          type: "hello-ok",
+          connectionId: typeof payload.connectionId === "string" ? payload.connectionId : "",
+          protocolVersion: typeof payload.protocolVersion === "string" ? payload.protocolVersion : "",
+          features: { methods: features.methods ?? [], events: features.events ?? [] },
+          snapshot: payload.snapshot as Record<string, unknown> | undefined,
+        });
+        return;
+      }
+
+      // Auth failure.
+      if (eventName === "hello-error" || eventName === "connect.error" || eventName === "auth.error") {
+        console.error(`[carapace:gw] received ${eventName}:`, payload);
+        this.handleHelloError({
+          type: "hello-error",
+          code: typeof payload.code === "string" ? payload.code : "unknown",
+          message: typeof payload.message === "string" ? payload.message : JSON.stringify(payload),
+        });
         return;
       }
 
@@ -217,59 +241,24 @@ export class GatewayClient extends EventEmitter {
   }
 
   private handleChallenge(payload: Record<string, unknown>): void {
-    // Send the connect handshake as a regular RPC request. The server replies
-    // with an RPC response (handled by handleRpcResponse via connectRpcId).
-    const id = String(++this.reqCounter);
-    this.connectRpcId = id;
+    // Mirror the server's event-envelope format for the connect reply.
+    // Send only token + nonce; avoid unknown fields that may trigger rejection.
+    const connectPayload: Record<string, unknown> = { token: this.token };
+    if (typeof payload.nonce === "string") connectPayload.nonce = payload.nonce;
 
-    const params: Record<string, unknown> = {
-      token: this.token,
-      clientId: "carapace",
-      capabilities: ["god-mode", "admin"],
-    };
-    if (typeof payload.nonce === "string") params.nonce = payload.nonce;
+    const frame = { type: "event", event: "connect", payload: connectPayload };
+    console.log("[carapace:gw] sending connect event:", JSON.stringify(frame));
+    this.send(frame);
 
-    const timeout = setTimeout(() => {
-      if (this.connectRpcId === id) this.connectRpcId = null;
-      this.pending.delete(id);
-      console.error("[carapace:gw] connect RPC timed out");
-      this.handleHelloError({
-        type: "hello-error",
-        code: "timeout",
-        message: "connect RPC timed out",
-      });
+    // Auth timeout — if the server doesn't respond within 30 s, give up.
+    const authTimeout = setTimeout(() => {
+      if (this.state === "authenticating") {
+        console.error("[carapace:gw] connect auth timed out");
+        this.handleHelloError({ type: "hello-error", code: "timeout", message: "auth timed out" });
+      }
     }, DEFAULT_TIMEOUT_MS);
-
-    this.pending.set(id, {
-      resolve: (result) => {
-        if (this.connectRpcId === id) this.connectRpcId = null;
-        const r = (result ?? {}) as Record<string, unknown>;
-        const features = (r.features ?? {}) as { methods?: string[]; events?: string[] };
-        this.handleHelloOk({
-          type: "hello-ok",
-          connectionId: typeof r.connectionId === "string" ? r.connectionId : "",
-          protocolVersion: typeof r.protocolVersion === "string" ? r.protocolVersion : "",
-          features: {
-            methods: features.methods ?? [],
-            events: features.events ?? [],
-          },
-          snapshot: r.snapshot as Record<string, unknown> | undefined,
-        });
-      },
-      reject: (err) => {
-        if (this.connectRpcId === id) this.connectRpcId = null;
-        console.error("[carapace:gw] connect RPC rejected:", err.message);
-        this.handleHelloError({
-          type: "hello-error",
-          code: "rpc-error",
-          message: err.message,
-        });
-      },
-      timeout,
-      method: "connect",
-    });
-
-    this.send({ type: "request", id, method: "connect", params });
+    this.once("ready", () => clearTimeout(authTimeout));
+    this.once("auth-error", () => clearTimeout(authTimeout));
   }
 
   private handleHelloOk(frame: HelloOk): void {
