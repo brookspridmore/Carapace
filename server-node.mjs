@@ -15,10 +15,33 @@
 
 import http from "node:http";
 import { Readable } from "node:stream";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import server from "./dist/server/server.js";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const STATIC_DIR = path.join(__dirname, "dist/client");
 const PORT = Number(process.env.PORT ?? 8080);
 const HOST = process.env.HOST ?? "127.0.0.1";
+
+const MIME_TYPES = {
+  ".js": "application/javascript",
+  ".css": "text/css",
+  ".html": "text/html",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".eot": "application/vnd.ms-fontobject",
+  ".json": "application/json",
+  ".map": "application/json",
+};
 
 // ── /api/stream — SSE keepalive ───────────────────────────────────────────
 
@@ -51,6 +74,51 @@ function handleStream(req, res) {
   };
   req.on("close", cleanup);
   req.on("error", cleanup);
+}
+
+// ── Static file serving ────────────────────────────────────────────────────
+
+function serveStaticFile(pathname, res) {
+  const filepath = path.join(STATIC_DIR, pathname);
+
+  // Security: prevent path traversal
+  if (!filepath.startsWith(STATIC_DIR)) {
+    res.statusCode = 403;
+    res.end("Forbidden");
+    return true;
+  }
+
+  try {
+    if (!fs.existsSync(filepath)) {
+      return false;
+    }
+
+    const stat = fs.statSync(filepath);
+    if (!stat.isFile()) {
+      return false;
+    }
+
+    const ext = path.extname(filepath);
+    const contentType = MIME_TYPES[ext] || "application/octet-stream";
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Length", stat.size);
+
+    // Cache static assets for 1 year (they have content hashes in filenames)
+    if (ext === ".js" || ext === ".css") {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+
+    const stream = fs.createReadStream(filepath);
+    stream.pipe(res);
+    return true;
+  } catch (err) {
+    console.error(`[carapace] error serving ${filepath}:`, err);
+    res.statusCode = 500;
+    res.end("Internal Server Error");
+    return true;
+  }
 }
 
 // ── Web Request <-> Node bridge ───────────────────────────────────────────
@@ -99,9 +167,18 @@ async function writeWebResponseToNode(response, res) {
 const httpServer = http.createServer(async (req, res) => {
   try {
     const url = req.url ?? "/";
+    const pathname = new URL(url, `http://${req.headers.host ?? `${HOST}:${PORT}`}`).pathname;
+
     if (url === "/api/stream" || url.startsWith("/api/stream?")) {
       handleStream(req, res);
       return;
+    }
+
+    // Serve static files from dist/client
+    if (pathname.startsWith("/assets/")) {
+      if (serveStaticFile(pathname, res)) {
+        return;
+      }
     }
 
     const request = nodeRequestToWebRequest(req);
