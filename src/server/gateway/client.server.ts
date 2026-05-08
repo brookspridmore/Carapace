@@ -15,7 +15,6 @@ import { EventEmitter } from "node:events";
 import type {
   HelloOk,
   HelloError,
-  RpcRequest,
   RpcResponse,
   GatewayEvent,
   GatewayConnectionState,
@@ -199,7 +198,13 @@ export class GatewayClient extends EventEmitter {
       return;
     }
 
-    // RPC response (has an id)
+    // RPC response. The real protocol wraps responses as
+    //   { type: "response", id, result?, error? }
+    // but legacy gateways send bare { id, result, error }.
+    if (frame.type === "response" && typeof frame.id === "string") {
+      this.handleRpcResponse(frame as unknown as RpcResponse);
+      return;
+    }
     if ("id" in frame && typeof frame.id === "string") {
       this.handleRpcResponse(frame as unknown as RpcResponse);
       return;
@@ -264,7 +269,7 @@ export class GatewayClient extends EventEmitter {
       method: "connect",
     });
 
-    this.send({ id, method: "connect", params });
+    this.send({ type: "request", id, method: "connect", params });
   }
 
   private handleHelloOk(frame: HelloOk): void {
@@ -424,8 +429,7 @@ export class GatewayClient extends EventEmitter {
         method,
       });
 
-      const req: RpcRequest = { id, method, params };
-      this.send(req);
+      this.send({ type: "request", id, method, params });
     });
   }
 
